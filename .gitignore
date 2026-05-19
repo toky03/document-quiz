@@ -1,0 +1,10 @@
+.env
+build/
+frontend/dist/
+frontend/node_modules/
+frontend/.vscode/
+backend/quiz_data.db
+backend/vector_db/
+backend/document-quiz-backend
+vector_db/
+frontend/.angular/

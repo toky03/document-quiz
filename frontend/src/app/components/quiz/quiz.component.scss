@@ -1,0 +1,152 @@
+.quiz-title {
+  margin: 16px 0 8px;
+}
+
+.question-card {
+  margin-bottom: 16px;
+}
+
+.question-text {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.navigation-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.progress-hint {
+  margin: 0 0 16px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.options-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.option {
+  display: block;
+}
+
+.submit-row {
+  margin: 16px 0;
+}
+
+.result-card {
+  margin-top: 16px;
+}
+
+.score {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--mat-sys-primary);
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.result-item {
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  padding-top: 12px;
+}
+
+.result-item h3 {
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status {
+  font-size: 0.78rem;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 600;
+}
+
+.status-correct {
+  background: #e6f4ea;
+  color: #1e8e3e;
+}
+
+.status-incorrect {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.option-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.option-selected-correct {
+  background: #e6f4ea;
+}
+
+.option-selected-wrong {
+  background: #fce8e6;
+}
+
+.option-missed-correct {
+  background: #fff7e0;
+}
+
+.badge {
+  margin-left: auto;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 500;
+}
+
+.badge-correct {
+  background: #d6eadb;
+  color: #1e8e3e;
+}
+
+.badge-wrong {
+  background: #fad2cf;
+  color: #a50e0e;
+}
+
+.badge-missed {
+  background: #fef0c3;
+  color: #8a5a00;
+}
+
+@media (max-width: 640px) {
+  .navigation-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .navigation-row button {
+    width: 100%;
+  }
+}

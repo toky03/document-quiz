@@ -1,0 +1,66 @@
+<mat-card class="upload-card">
+  <mat-card-header>
+    <mat-card-title>Dokumente hochladen</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Model</mat-label>
+      <input matInput [(ngModel)]="model" placeholder="z. B. gpt-4.1-mini" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>OpenAI API Key (optional, wenn bereits gespeichert)</mat-label>
+      <input matInput [(ngModel)]="apiKey" type="password" placeholder="sk-..." />
+    </mat-form-field>
+
+    <p class="file-label">PDF-Dateien</p>
+    <input #fileInput class="hidden-file-input" type="file" accept="application/pdf" (change)="onFilesSelected($event)" multiple />
+    <button mat-stroked-button type="button" color="primary" class="select-files-btn" (click)="fileInput.click()">
+      <mat-icon>upload_file</mat-icon>
+      Dateien auswählen
+    </button>
+    @if (files().length > 0) {
+      <p class="file-hint">{{ files().length }} Datei(en) ausgewählt</p>
+    }
+  </mat-card-content>
+
+  <mat-card-actions align="start">
+    <button mat-flat-button color="primary" class="upload-btn" (click)="upload()" [disabled]="isLoading()">
+      @if (isLoading()) {
+        <mat-spinner diameter="18" mode="indeterminate"></mat-spinner>
+      } @else {
+        <mat-icon>cloud_upload</mat-icon>
+      }
+      {{ isLoading() ? 'Verarbeite...' : 'Upload starten' }}
+    </button>
+  </mat-card-actions>
+
+  @if (error()) {
+    <mat-card-content>
+      <p class="error-text">{{ error() }}</p>
+    </mat-card-content>
+  }
+</mat-card>
+
+<mat-card class="chapters-card">
+  <mat-card-header>
+    <mat-card-title>Verfügbare Kapitel</mat-card-title>
+  </mat-card-header>
+
+  <mat-card-content>
+    @if (chapterList().length === 0) {
+      <p class="muted">Noch keine Kapitel vorhanden.</p>
+    } @else {
+      <mat-list>
+        @for (chapter of chapterList(); track chapter.id) {
+          <mat-list-item>
+            <span matListItemTitle>{{ chapter.title }}</span>
+            <span matListItemLine>{{ chapter.question_count }} Fragen</span>
+            <button mat-stroked-button color="primary" matListItemMeta (click)="openQuiz(chapter)">Quiz starten</button>
+          </mat-list-item>
+        }
+      </mat-list>
+    }
+  </mat-card-content>
+</mat-card>
