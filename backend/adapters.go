@@ -16,6 +16,10 @@ func (sqliteRelationalStoreAdapter) GetSetting(key string) (string, error) {
 	return getSetting(key)
 }
 
+func (sqliteRelationalStoreAdapter) DeleteSetting(key string) error {
+	return deleteSetting(key)
+}
+
 func (sqliteRelationalStoreAdapter) UpsertChapter(
 	title, sourceName, sourceType string,
 ) (int, error) {
@@ -74,6 +78,10 @@ func (sqliteRelationalStoreAdapter) GetChapterQuestions(chapterID int) ([]app.Qu
 		})
 	}
 	return converted, nil
+}
+
+func (sqliteRelationalStoreAdapter) DeleteChapter(chapterID int) error {
+	return deleteChapter(chapterID)
 }
 
 type chromaVectorStoreAdapter struct{}

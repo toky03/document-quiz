@@ -9,10 +9,16 @@
       <input matInput [(ngModel)]="model" placeholder="z. B. gpt-4.1-mini" />
     </mat-form-field>
 
+    @if (hasSavedApiKey()) {
+      <p class="muted">Gespeicherter API-Key wird verwendet.</p>
+      <button mat-stroked-button color="warn" (click)="clearApiKey()">API-Key löschen</button>
+    } @else {
     <mat-form-field appearance="outline" class="full-width">
-      <mat-label>OpenAI API Key (optional, wenn bereits gespeichert)</mat-label>
+      <mat-label>OpenAI API Key</mat-label>
       <input matInput [(ngModel)]="apiKey" type="password" placeholder="sk-..." />
     </mat-form-field>
+    }
+
 
     <p class="file-label">PDF-Dateien</p>
     <input #fileInput class="hidden-file-input" type="file" accept="application/pdf" (change)="onFilesSelected($event)" multiple />
@@ -25,7 +31,7 @@
     }
   </mat-card-content>
 
-  <mat-card-actions align="start">
+  @if (files().length > 0) {
     <button mat-flat-button color="primary" class="upload-btn" (click)="upload()" [disabled]="isLoading()">
       @if (isLoading()) {
         <mat-spinner diameter="18" mode="indeterminate"></mat-spinner>
@@ -34,6 +40,9 @@
       }
       {{ isLoading() ? 'Verarbeite...' : 'Upload starten' }}
     </button>
+  }
+  <mat-card-actions align="start">
+
   </mat-card-actions>
 
   @if (error()) {
@@ -56,8 +65,9 @@
         @for (chapter of chapterList(); track chapter.id) {
           <mat-list-item>
             <span matListItemTitle>{{ chapter.title }}</span>
+            <div matListItemMeta><button mat-stroked-button color="primary"  (click)="openQuiz(chapter)">Quiz starten</button></div>
+            <div matListItemMeta><button mat-flat-button class="btn-warn" (click)="deleteChapter(chapter)"><mat-icon>delete</mat-icon>Löschen</button></div>
             <span matListItemLine>{{ chapter.question_count }} Fragen</span>
-            <button mat-stroked-button color="primary" matListItemMeta (click)="openQuiz(chapter)">Quiz starten</button>
           </mat-list-item>
         }
       </mat-list>

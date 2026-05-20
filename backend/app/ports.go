@@ -10,6 +10,8 @@ type APIPort interface {
 	ListChapters(ctx context.Context) ([]Chapter, error)
 	GetChapterQuestions(ctx context.Context, chapterID int) ([]QuizQuestion, error)
 	SubmitQuiz(ctx context.Context, chapterID int, answers [][]int) (QuizEvaluationResult, error)
+	DeleteChapter(ctx context.Context, chapterID int) error
+	ClearAPIKey(ctx context.Context) error
 }
 
 // RelationalStorePort is the outbound port for relational persistence and app settings.
@@ -20,6 +22,8 @@ type RelationalStorePort interface {
 	ReplaceQAPairs(chapterID int, qaPairs []QuizQuestion) error
 	ListQuizChapters() ([]Chapter, error)
 	GetChapterQuestions(chapterID int) ([]QuizQuestion, error)
+	DeleteChapter(chapterID int) error
+	DeleteSetting(key string) error
 }
 
 // VectorDBPort is the outbound port for vector storage.

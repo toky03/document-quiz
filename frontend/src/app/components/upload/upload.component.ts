@@ -2,7 +2,7 @@ import { Component, computed, signal, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { EMPTY, Subject, switchMap, catchError, map, startWith, tap } from 'rxjs';
+import { EMPTY, Subject, switchMap, catchError, map, startWith, tap, filter } from 'rxjs';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -10,7 +10,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDialog } from '@angular/material/dialog';
 import { QuizService, Chapter } from '../../services/quiz.service';
+import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 
 interface UploadParams { files: File[]; model: string; apiKey: string; }
 
@@ -31,8 +33,10 @@ interface UploadParams { files: File[]; model: string; apiKey: string; }
   styleUrl: './upload.component.scss'
 })
 export class UploadComponent {
+
   private quizService = inject(QuizService);
   private router = inject(Router);
+  private dialog = inject(MatDialog);
 
   readonly files = signal<File[]>([]);
   readonly error = signal('');
@@ -43,6 +47,19 @@ export class UploadComponent {
 
   private readonly refreshTrigger$ = new Subject<void>();
   private readonly uploadTrigger$ = new Subject<UploadParams>();
+  private readonly apiKeyRefreshTrigger$ = new Subject<void>();
+
+  readonly hasSavedApiKey = toSignal(
+    this.apiKeyRefreshTrigger$.pipe(
+      startWith(null),
+      switchMap(() =>
+        this.quizService.hasSavedApiKey().pipe(
+          catchError(() => EMPTY)
+        )
+      )
+    ),
+    { initialValue: false }
+  );
 
   readonly chapters = toSignal(
     this.refreshTrigger$.pipe(
@@ -94,5 +111,39 @@ export class UploadComponent {
 
   openQuiz(chapter: Chapter): void {
     this.router.navigate(['/quiz', chapter.id]);
+  }
+
+  clearApiKey(): void {
+    this.quizService.clearApiKey().pipe(
+      catchError((err: Error) => {
+        this.error.set(err.message);
+        return EMPTY;
+      })
+    ).subscribe(() => {
+      this.apiKeyRefreshTrigger$.next();
+    });
+  }
+
+  deleteChapter(chapter: Chapter): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Kapitel löschen',
+        message: `Soll das Kapitel "${chapter.title}" wirklich gelöscht werden?`,
+      },
+    });
+
+    dialogRef.afterClosed().pipe(
+      filter((confirmed: boolean) => confirmed),
+      switchMap(() =>
+        this.quizService.deleteChapter(chapter.id).pipe(
+          catchError((err: Error) => {
+            this.error.set(err.message);
+            return EMPTY;
+          })
+        )
+      )
+    ).subscribe(() => {
+      this.refreshTrigger$.next();
+    });
   }
 }

@@ -37,9 +37,6 @@ func resolveSQLitePath() string {
 }
 
 func main() {
-	if envVectorDBDir := os.Getenv("CHROMA_DB_PATH"); envVectorDBDir != "" {
-		VectorDBDir = envVectorDBDir
-	}
 	SQLiteDBPath = resolveSQLitePath()
 
 	// Initialize SQLite database

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 export interface Chapter {
   id: number;
@@ -33,6 +34,7 @@ export interface QuizResult {
 
 @Injectable({ providedIn: 'root' })
 export class QuizService {
+
   private apiUrl = 'http://localhost:8080/api';
 
   constructor(private http: HttpClient) {}
@@ -62,5 +64,19 @@ export class QuizService {
       chapter_id: chapterId,
       answers
     });
+  }
+
+  deleteChapter(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/chapters/${id}`);
+  }
+
+  hasSavedApiKey(): Observable<boolean> {
+    return this.http.get<{ is_saved: boolean }>(`${this.apiUrl}/settings/openai-key-status`).pipe(
+      map(res => res.is_saved)
+    );
+  }
+
+  clearApiKey(): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/settings/openai-key`);
   }
 }

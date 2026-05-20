@@ -8,3 +8,4 @@ backend/vector_db/
 backend/document-quiz-backend
 vector_db/
 frontend/.angular/
+quiz_data.db

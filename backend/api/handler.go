@@ -21,8 +21,10 @@ func NewHandler(service app.APIPort) *Handler {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings/openai-key-status", h.handleAPIKeyStatus)
 	mux.HandleFunc("POST /api/settings/openai-key", h.handleSaveAPIKey)
+	mux.HandleFunc("DELETE /api/settings/openai-key", h.handleClearAPIKey)
 	mux.HandleFunc("POST /api/upload", h.handleFileUpload)
 	mux.HandleFunc("GET /api/chapters", h.handleGetChapters)
+	mux.HandleFunc("DELETE /api/chapters/{id}", h.handleDeleteChapter)
 	mux.HandleFunc("GET /api/chapters/{id}/questions", h.handleGetChapterQuestions)
 	mux.HandleFunc("POST /api/quiz/submit", h.handleQuizSubmit)
 }
@@ -108,6 +110,18 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) handleClearAPIKey(w http.ResponseWriter, r *http.Request) {
+	if err := h.service.ClearAPIKey(r.Context()); err != nil {
+		writeJSON(
+			w,
+			http.StatusInternalServerError,
+			map[string]string{"error": "API Key konnte nicht gelöscht werden"},
+		)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *Handler) handleSaveAPIKey(w http.ResponseWriter, r *http.Request) {
 	var req SaveAPIKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -143,6 +157,29 @@ func (h *Handler) handleAPIKeyStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"is_saved": isSaved})
+}
+
+func (h *Handler) handleDeleteChapter(w http.ResponseWriter, r *http.Request) {
+	chapterID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Ungültige Kapitel-ID"})
+		return
+	}
+
+	if err := h.service.DeleteChapter(r.Context(), chapterID); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "nicht gefunden") {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Kapitel nicht gefunden"})
+			return
+		}
+		writeJSON(
+			w,
+			http.StatusInternalServerError,
+			map[string]string{"error": "Kapitel konnte nicht gelöscht werden"},
+		)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) handleGetChapters(w http.ResponseWriter, r *http.Request) {

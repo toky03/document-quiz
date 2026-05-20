@@ -40,3 +40,14 @@ mat-card-actions button mat-spinner {
   margin-right: 8px;
   vertical-align: middle;
 }
+
+mat-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-warn {
+  --mat-button-filled-container-color: #c20427;
+  --mat-button-filled-label-text-color: #ffffff;
+}

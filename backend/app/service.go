@@ -197,6 +197,14 @@ func (s *QuizService) GetChapterQuestions(
 	return s.relationalStore.GetChapterQuestions(chapterID)
 }
 
+func (s *QuizService) ClearAPIKey(_ context.Context) error {
+	return s.relationalStore.DeleteSetting("openai_api_key")
+}
+
+func (s *QuizService) DeleteChapter(_ context.Context, chapterID int) error {
+	return s.relationalStore.DeleteChapter(chapterID)
+}
+
 func (s *QuizService) SubmitQuiz(
 	_ context.Context,
 	chapterID int,

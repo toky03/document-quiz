@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { QuizService, QuizQuestion, QuizResult } from '../../services/quiz.service';
 
 @Component({
@@ -23,6 +24,7 @@ import { QuizService, QuizQuestion, QuizResult } from '../../services/quiz.servi
     MatRadioModule,
     MatCheckboxModule,
     MatChipsModule,
+    MatProgressBarModule,
   ],
   templateUrl: './quiz.component.html',
   styleUrl: './quiz.component.scss'
@@ -45,18 +47,25 @@ export class QuizComponent {
   readonly currentQuestionIndex = signal(0);
   readonly totalQuestions = computed(() => this.questions().length);
   readonly allAnswered = computed(() => {
-    const qs = this.questions();
+    const questions = this.questions();
     const givenAnswers = this.answers();
-    if (qs.length === 0) {
+    if (questions.length === 0) {
       return false;
     }
-    return qs.every((_, index) => (givenAnswers[index] ?? []).length > 0);
+    return questions.every((_, index) => (givenAnswers[index] ?? []).length > 0);
   });
   readonly answeredCount = computed(() => this.answers().filter(answer => answer.length > 0).length);
+  readonly progressPercent = computed(() => {
+    const total = this.totalQuestions();
+    if (total === 0) {
+      return 0;
+    }
+    return (this.answeredCount() / total) * 100;
+  });
   readonly currentQuestion = computed(() => {
-    const qs = this.questions();
+    const questions = this.questions();
     const index = this.currentQuestionIndex();
-    return qs[index];
+    return questions[index];
   });
 
   private readonly submitTrigger$ = new Subject<number[][]>();
@@ -73,8 +82,8 @@ export class QuizComponent {
 
   constructor() {
     effect(() => {
-      const qs = this.questions();
-      this.answers.set(new Array(qs.length).fill(null).map(() => []));
+      const questions = this.questions();
+      this.answers.set(new Array(questions.length).fill(null).map(() => []));
       this.currentQuestionIndex.set(0);
     });
   }

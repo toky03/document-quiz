@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -113,6 +114,17 @@ func setSetting(key, value string) error {
 		DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
 	`, key, value, updatedAt)
 
+	return err
+}
+
+func deleteSetting(key string) error {
+	db, err := getDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("DELETE FROM app_settings WHERE key = ?", key)
 	return err
 }
 
@@ -277,4 +289,31 @@ func getChapterQuestions(chapterID int) ([]QuizQuestion, error) {
 	}
 
 	return questions, nil
+}
+
+func deleteChapter(chapterID int) error {
+	db, err := getDB()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return err
+	}
+
+	result, err := db.Exec("DELETE FROM chapters WHERE id = ?", chapterID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("kapitel nicht gefunden")
+	}
+
+	return nil
 }
