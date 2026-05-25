@@ -22,6 +22,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings/openai-key-status", h.handleAPIKeyStatus)
 	mux.HandleFunc("POST /api/settings/openai-key", h.handleSaveAPIKey)
 	mux.HandleFunc("DELETE /api/settings/openai-key", h.handleClearAPIKey)
+	mux.HandleFunc("GET /api/settings/provider", h.handleGetProvider)
+	mux.HandleFunc("POST /api/settings/provider", h.handleSetProvider)
 	mux.HandleFunc("POST /api/upload", h.handleFileUpload)
 	mux.HandleFunc("GET /api/chapters", h.handleGetChapters)
 	mux.HandleFunc("DELETE /api/chapters/{id}", h.handleDeleteChapter)
@@ -31,6 +33,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 type SaveAPIKeyRequest struct {
 	APIKey string `json:"api_key"`
+}
+
+type SetProviderRequest struct {
+	Provider string `json:"provider"`
 }
 
 type QuizSubmitRequest struct {
@@ -143,6 +149,34 @@ func (h *Handler) handleSaveAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"saved": true})
+}
+
+func (h *Handler) handleGetProvider(w http.ResponseWriter, r *http.Request) {
+	provider, err := h.service.GetProvider(r.Context())
+	if err != nil {
+		writeJSON(
+			w,
+			http.StatusInternalServerError,
+			map[string]string{"error": "Provider konnte nicht geladen werden"},
+		)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"provider": provider})
+}
+
+func (h *Handler) handleSetProvider(w http.ResponseWriter, r *http.Request) {
+	var req SetProviderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Ungültige Anfrage"})
+		return
+	}
+
+	if err := h.service.SetProvider(r.Context(), req.Provider); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": toUserError(err)})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"provider": req.Provider})
 }
 
 func (h *Handler) handleAPIKeyStatus(w http.ResponseWriter, r *http.Request) {

@@ -53,13 +53,20 @@ func main() {
 
 	relationalStore := sqliteRelationalStoreAdapter{}
 	vectorStore := chromaVectorStoreAdapter{}
-	llm := app.NewOpenAILLM(MaxCharsPerChapter, QuizOptionCount)
-	service := app.NewQuizService(relationalStore, vectorStore, llm, app.ServiceConfig{
-		ChunkSize:       ChunkSize,
-		ChunkOverlap:    ChunkOverlap,
-		MaxCharsPerText: MaxCharsPerChapter,
-		QuizOptionCount: QuizOptionCount,
-	})
+	openAILLM := app.NewOpenAILLM(MaxCharsPerChapter, QuizOptionCount)
+	claudeCLILLM := app.NewClaudeCLILLM(MaxCharsPerChapter, QuizOptionCount)
+	service := app.NewQuizService(
+		relationalStore,
+		vectorStore,
+		openAILLM,
+		claudeCLILLM,
+		app.ServiceConfig{
+			ChunkSize:       ChunkSize,
+			ChunkOverlap:    ChunkOverlap,
+			MaxCharsPerText: MaxCharsPerChapter,
+			QuizOptionCount: QuizOptionCount,
+		},
+	)
 	api.NewHandler(service).RegisterRoutes(mux)
 
 	// Start server

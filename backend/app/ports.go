@@ -12,7 +12,15 @@ type APIPort interface {
 	SubmitQuiz(ctx context.Context, chapterID int, answers [][]int) (QuizEvaluationResult, error)
 	DeleteChapter(ctx context.Context, chapterID int) error
 	ClearAPIKey(ctx context.Context) error
+	GetProvider(ctx context.Context) (string, error)
+	SetProvider(ctx context.Context, provider string) error
 }
+
+// LLM provider identifiers stored in app_settings under key "llm_provider".
+const (
+	ProviderOpenAI    = "openai"
+	ProviderClaudeCLI = "claude_cli"
+)
 
 // RelationalStorePort is the outbound port for relational persistence and app settings.
 type RelationalStorePort interface {

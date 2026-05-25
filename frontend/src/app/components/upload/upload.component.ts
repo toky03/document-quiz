@@ -10,9 +10,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import { QuizService, Chapter } from '../../services/quiz.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
+
+type Provider = 'openai' | 'claude_cli';
 
 interface UploadParams { files: File[]; model: string; apiKey: string; }
 
@@ -28,6 +31,7 @@ interface UploadParams { files: File[]; model: string; apiKey: string; }
     MatIconModule,
     MatListModule,
     MatProgressSpinnerModule,
+    MatSelectModule,
   ],
   templateUrl: './upload.component.html',
   styleUrl: './upload.component.scss'
@@ -44,10 +48,14 @@ export class UploadComponent {
 
   model = 'gpt-4.1-mini';
   apiKey = '';
+  readonly provider = signal<Provider>('openai');
 
   private readonly refreshTrigger$ = new Subject<void>();
   private readonly uploadTrigger$ = new Subject<UploadParams>();
   private readonly apiKeyRefreshTrigger$ = new Subject<void>();
+  private readonly providerRefreshTrigger$ = new Subject<void>();
+
+  readonly isOpenAI = computed(() => this.provider() === 'openai');
 
   readonly hasSavedApiKey = toSignal(
     this.apiKeyRefreshTrigger$.pipe(
@@ -59,6 +67,24 @@ export class UploadComponent {
       )
     ),
     { initialValue: false }
+  );
+
+  private readonly _providerEffect = toSignal(
+    this.providerRefreshTrigger$.pipe(
+      startWith(null),
+      switchMap(() =>
+        this.quizService.getProvider().pipe(
+          tap(p => {
+            const next = (p === 'claude_cli' ? 'claude_cli' : 'openai') as Provider;
+            this.provider.set(next);
+            if (next === 'claude_cli' && (this.model === '' || this.model.startsWith('gpt-'))) {
+              this.model = 'sonnet';
+            }
+          }),
+          catchError(() => EMPTY)
+        )
+      )
+    )
   );
 
   readonly chapters = toSignal(
@@ -121,6 +147,23 @@ export class UploadComponent {
       })
     ).subscribe(() => {
       this.apiKeyRefreshTrigger$.next();
+    });
+  }
+
+  onProviderChange(next: Provider): void {
+    this.quizService.setProvider(next).pipe(
+      catchError((err: Error) => {
+        this.error.set(err.message);
+        return EMPTY;
+      })
+    ).subscribe(() => {
+      this.provider.set(next);
+      if (next === 'claude_cli' && (this.model === '' || this.model.startsWith('gpt-'))) {
+        this.model = 'sonnet';
+      }
+      if (next === 'openai' && !this.model.startsWith('gpt-')) {
+        this.model = 'gpt-4.1-mini';
+      }
     });
   }
 
