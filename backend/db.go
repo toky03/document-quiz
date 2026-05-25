@@ -36,10 +36,39 @@ type QuizQuestion struct {
 	Options        []string `json:"options"`
 	CorrectOptions []int    `json:"correct_options"`
 	Answer         string   `json:"answer"`
+	Explanations   []string `json:"explanations,omitempty"`
 }
 
 func getDB() (*sql.DB, error) {
 	return sql.Open("sqlite3", SQLiteDBPath)
+}
+
+func addColumnIfMissing(db *sql.DB, table, column, columnType string) error {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			ctype     string
+			notnull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+
+	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, columnType))
+	return err
 }
 
 func initSQLiteDB() error {
@@ -82,6 +111,12 @@ func initSQLiteDB() error {
 			FOREIGN KEY(chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
 		)
 	`); err != nil {
+		return err
+	}
+
+	// Idempotent migration: add explanations_json to qa_pairs if missing.
+	// SQLite has no IF NOT EXISTS for ADD COLUMN, so detect via PRAGMA.
+	if err := addColumnIfMissing(db, "qa_pairs", "explanations_json", "TEXT"); err != nil {
 		return err
 	}
 
@@ -197,14 +232,19 @@ func replaceQAPairs(chapterID int, qaPairs []QuizQuestion) error {
 	for _, pair := range qaPairs {
 		optionsJSON, _ := json.Marshal(pair.Options)
 		correctJSON, _ := json.Marshal(pair.CorrectOptions)
+		var explanationsJSON sql.NullString
+		if len(pair.Explanations) > 0 {
+			b, _ := json.Marshal(pair.Explanations)
+			explanationsJSON = sql.NullString{String: string(b), Valid: true}
+		}
 
 		_, err := db.Exec(`
 			INSERT INTO qa_pairs (
-				chapter_id, question, quiz_type, options_json, 
-				correct_options_json, answer, created_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?)
+				chapter_id, question, quiz_type, options_json,
+				correct_options_json, answer, created_at, explanations_json
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		`, chapterID, pair.Question, pair.QuizType, string(optionsJSON),
-			string(correctJSON), pair.Answer, createdAt)
+			string(correctJSON), pair.Answer, createdAt, explanationsJSON)
 
 		if err != nil {
 			return err
@@ -256,7 +296,7 @@ func getChapterQuestions(chapterID int) ([]QuizQuestion, error) {
 	defer db.Close()
 
 	rows, err := db.Query(`
-		SELECT question, quiz_type, options_json, correct_options_json, answer
+		SELECT question, quiz_type, options_json, correct_options_json, answer, explanations_json
 		FROM qa_pairs
 		WHERE chapter_id = ?
 		  AND options_json IS NOT NULL
@@ -272,8 +312,9 @@ func getChapterQuestions(chapterID int) ([]QuizQuestion, error) {
 	for rows.Next() {
 		var q QuizQuestion
 		var optionsJSON, correctJSON string
+		var explanationsJSON sql.NullString
 
-		if err := rows.Scan(&q.Question, &q.QuizType, &optionsJSON, &correctJSON, &q.Answer); err != nil {
+		if err := rows.Scan(&q.Question, &q.QuizType, &optionsJSON, &correctJSON, &q.Answer, &explanationsJSON); err != nil {
 			return nil, err
 		}
 
@@ -283,6 +324,12 @@ func getChapterQuestions(chapterID int) ([]QuizQuestion, error) {
 
 		if err := json.Unmarshal([]byte(correctJSON), &q.CorrectOptions); err != nil {
 			q.CorrectOptions = []int{}
+		}
+
+		if explanationsJSON.Valid && explanationsJSON.String != "" {
+			if err := json.Unmarshal([]byte(explanationsJSON.String), &q.Explanations); err != nil {
+				q.Explanations = nil
+			}
 		}
 
 		questions = append(questions, q)

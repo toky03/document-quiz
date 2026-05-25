@@ -2,6 +2,21 @@
   margin: 16px 0 8px;
 }
 
+.practice-score {
+  margin: 4px 0 12px;
+  font-size: 0.95rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.practice-score strong {
+  color: var(--mat-sys-on-surface);
+  font-weight: 600;
+}
+
+.practice-feedback {
+  margin-top: 8px;
+}
+
 .question-card {
   margin-bottom: 16px;
 }
@@ -104,11 +119,20 @@
 
 .option-result {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
   background: #f8f9fa;
+}
+
+.option-explanation {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .option-selected-correct {

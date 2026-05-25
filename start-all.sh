@@ -23,10 +23,13 @@ if [[ ! -d "$VECTOR_DB_DIR" ]]; then
   mkdir -p "$VECTOR_DB_DIR"
 fi
 
-BACKEND_CMD=("go" "run" ".")
-if [[ -x "$BACKEND_DIR/document-quiz-backend" ]]; then
-  BACKEND_CMD=("$BACKEND_DIR/document-quiz-backend")
-fi
+# Always rebuild before launch so source changes (incl. schema migrations
+# in db.go) take effect. Go's build cache keeps this near-instant when
+# nothing changed. A prebuilt binary that survives across feature branches
+# silently kept running stale schema migrations — don't reintroduce that.
+echo "Backend wird gebaut ..."
+( cd "$BACKEND_DIR" && go build -o document-quiz-backend . )
+BACKEND_CMD=("$BACKEND_DIR/document-quiz-backend")
 
 cleanup() {
   echo
@@ -89,4 +92,9 @@ echo "Backend PID: $BACKEND_PID"
 echo "Frontend PID: $FRONTEND_PID"
 echo "Zum Beenden Strg+C drücken."
 
-wait -n "$BACKEND_PID" "$FRONTEND_PID"
+# Wait until either backend or frontend exits, then let the EXIT trap
+# clean up the rest. Uses a polling loop instead of `wait -n` because
+# macOS still ships bash 3.2 and `wait -n` requires bash >= 4.3.
+while kill -0 "$BACKEND_PID" 2>/dev/null && kill -0 "$FRONTEND_PID" 2>/dev/null; do
+  sleep 1
+done
