@@ -89,4 +89,9 @@ echo "Backend PID: $BACKEND_PID"
 echo "Frontend PID: $FRONTEND_PID"
 echo "Zum Beenden Strg+C drücken."
 
-wait -n "$BACKEND_PID" "$FRONTEND_PID"
+# Wait until either backend or frontend exits, then let the EXIT trap
+# clean up the rest. Uses a polling loop instead of `wait -n` because
+# macOS still ships bash 3.2 and `wait -n` requires bash >= 4.3.
+while kill -0 "$BACKEND_PID" 2>/dev/null && kill -0 "$FRONTEND_PID" 2>/dev/null; do
+  sleep 1
+done
