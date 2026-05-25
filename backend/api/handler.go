@@ -258,6 +258,12 @@ func (h *Handler) handleGetChapterQuestions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// The full QuizQuestion shape (incl. correct_options and explanations)
+	// is sent to the client. This endpoint trusts the client — practice mode
+	// needs the explanations during play, and `correct_options` is already
+	// exposed by this endpoint for the existing results-page rendering. If
+	// stricter cheat-prevention becomes a requirement, evaluate per-answer
+	// on the server via a stateful submit-one endpoint instead.
 	writeJSON(w, http.StatusOK, questions)
 }
 

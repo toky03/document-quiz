@@ -59,6 +59,10 @@ Mische Single-Choice- und Multiple-Choice-Fragen.
 Jede Frage muss genau %d Antwortoptionen haben.
 Nutze ausschließlich den Kontext.
 
+Zu jeder Antwortoption gehört eine kurze Erklärung (1–2 Sätze, auf Deutsch),
+warum diese Option richtig oder falsch ist. Die Erklärungen müssen dieselbe
+Reihenfolge wie die Optionen haben.
+
 Kontext:
 %s
 
@@ -68,10 +72,12 @@ Antworte nur als gültiges JSON im Format:
 		"question": "...",
 		"quiz_type": "single" | "multiple",
 		"options": ["...", "...", "...", "..."],
-		"correct_options": [0]
+		"correct_options": [0],
+		"explanations": ["...", "...", "...", "..."]
 	}
 ]
-Die Indizes in correct_options sind 0-basiert.`, qaCount, chapterTitle, l.quizOptionCount, trimmedContext)
+Die Indizes in correct_options sind 0-basiert. Das explanations-Array muss
+genauso viele Einträge haben wie das options-Array.`, qaCount, chapterTitle, l.quizOptionCount, trimmedContext)
 
 	cmdCtx, cancel := context.WithTimeout(ctx, l.timeout)
 	defer cancel()
@@ -156,7 +162,17 @@ Die Indizes in correct_options sind 0-basiert.`, qaCount, chapterTitle, l.quizOp
 			continue
 		}
 
-		shuffledOptions, remappedCorrect := shuffleOptionsAndRemapCorrect(options, correct, rng)
+		var explanations []string
+		if len(item.Explanations) == l.quizOptionCount {
+			explanations = make([]string, 0, l.quizOptionCount)
+			for _, exp := range item.Explanations {
+				explanations = append(explanations, strings.TrimSpace(exp))
+			}
+		}
+
+		shuffledOptions, remappedCorrect, shuffledExplanations := shuffleOptionsAndRemapCorrect(
+			options, correct, explanations, rng,
+		)
 
 		answerParts := make([]string, 0, len(remappedCorrect))
 		for _, idx := range remappedCorrect {
@@ -169,6 +185,7 @@ Die Indizes in correct_options sind 0-basiert.`, qaCount, chapterTitle, l.quizOp
 			Options:        shuffledOptions,
 			CorrectOptions: remappedCorrect,
 			Answer:         strings.Join(answerParts, ", "),
+			Explanations:   shuffledExplanations,
 		})
 	}
 

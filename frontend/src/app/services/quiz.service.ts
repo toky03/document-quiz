@@ -16,6 +16,7 @@ export interface QuizQuestion {
   options: string[];
   correct_options: number[];
   answer: string;
+  explanations?: string[];
 }
 
 export interface QuizResult {
@@ -29,6 +30,7 @@ export interface QuizResult {
     is_correct: boolean;
     options: string[];
     quiz_type: string;
+    explanations?: string[];
   }>;
 }
 
