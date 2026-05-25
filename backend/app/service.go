@@ -329,6 +329,7 @@ func (s *QuizService) SubmitQuiz(
 			IsCorrect:     isCorrect,
 			Options:       question.Options,
 			QuizType:      question.QuizType,
+			Explanations:  question.Explanations,
 		})
 	}
 

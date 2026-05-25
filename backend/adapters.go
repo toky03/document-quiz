@@ -38,6 +38,7 @@ func (sqliteRelationalStoreAdapter) ReplaceQAPairs(
 			Options:        append([]string(nil), q.Options...),
 			CorrectOptions: append([]int(nil), q.CorrectOptions...),
 			Answer:         q.Answer,
+			Explanations:   append([]string(nil), q.Explanations...),
 		})
 	}
 	return replaceQAPairs(chapterID, converted)
@@ -75,6 +76,7 @@ func (sqliteRelationalStoreAdapter) GetChapterQuestions(chapterID int) ([]app.Qu
 			Options:        append([]string(nil), q.Options...),
 			CorrectOptions: append([]int(nil), q.CorrectOptions...),
 			Answer:         q.Answer,
+			Explanations:   append([]string(nil), q.Explanations...),
 		})
 	}
 	return converted, nil

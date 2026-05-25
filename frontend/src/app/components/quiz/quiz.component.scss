@@ -104,11 +104,20 @@
 
 .option-result {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
   background: #f8f9fa;
+}
+
+.option-explanation {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .option-selected-correct {

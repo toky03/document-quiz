@@ -29,6 +29,7 @@ export interface QuizResult {
     is_correct: boolean;
     options: string[];
     quiz_type: string;
+    explanations?: string[];
   }>;
 }
 

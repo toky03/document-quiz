@@ -258,6 +258,13 @@ func (h *Handler) handleGetChapterQuestions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Explanations are stored alongside the questions, but they reveal the
+	// correct answer in their wording. Only ship them in the SubmitQuiz
+	// response (results page), never during play.
+	for i := range questions {
+		questions[i].Explanations = nil
+	}
+
 	writeJSON(w, http.StatusOK, questions)
 }
 

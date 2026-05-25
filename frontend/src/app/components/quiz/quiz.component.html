@@ -121,6 +121,10 @@
                   @if (isMissedCorrectOption(item.user_answer, item.correct_answer, optionIndex)) {
                     <span class="badge badge-missed">sollte angekreuzt werden</span>
                   }
+
+                  @if (item.explanations && item.explanations[optionIndex]) {
+                    <p class="option-explanation">{{ item.explanations[optionIndex] }}</p>
+                  }
                 </li>
               }
             </ul>
