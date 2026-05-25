@@ -7,17 +7,15 @@ Diese Anleitung beschreibt den **erstmaligen Start** des Projekts auf Linux/macO
 Bitte stelle sicher, dass folgende Tools installiert sind:
 
 - Docker
-- Go (empfohlen: 1.23+)
-- Node.js (empfohlen: 20+)
+- Go 1.24+
+- Node.js 20.19+ oder 22.12+ (Angular 21)
 - npm
 
-Optional zur Prüfung:
+Statt manuell zu prüfen kannst du `./doctor.sh` ausführen — das Skript meldet
+fehlende oder zu alte Versionen.
 
 ```bash
-docker --version
-go version
-node -v
-npm -v
+./doctor.sh
 ```
 
 ## 2. Projekt klonen und ins Verzeichnis wechseln
@@ -29,12 +27,23 @@ cd document-quiz
 
 ## 3. Abhängigkeiten einmalig installieren
 
+Der schnellste Weg ist das Setup-Skript im Projektroot:
+
+```bash
+./install.sh
+```
+
+Es ruft zuerst `./doctor.sh` auf, lädt anschließend Backend- und
+Frontend-Abhängigkeiten, zieht das Chroma-Docker-Image vor und baut das
+Backend-Binary.
+
+Manuell (Alternative):
+
 ### Backend
 
 ```bash
 cd backend
 go mod download
-go mod tidy
 cd ..
 ```
 
@@ -42,7 +51,7 @@ cd ..
 
 ```bash
 cd frontend
-npm install
+npm ci
 cd ..
 ```
 
@@ -108,10 +117,13 @@ npm run start
 
 ## 7. Häufige Probleme
 
-- `permission denied` bei `./start-all.sh`:
+Bei Problemen zuerst `./doctor.sh` ausführen — meldet fehlende oder
+inkompatible Versionen von Node, Go und Docker.
+
+- `permission denied` bei `./start-all.sh` / `./install.sh` / `./doctor.sh`:
 
 	```bash
-	chmod +x start-all.sh
+	chmod +x start-all.sh install.sh doctor.sh
 	```
 
 - Port belegt (`4200`, `8080` oder `8000`):
@@ -123,9 +135,17 @@ npm run start
 - Frontend kann Backend nicht erreichen:
 	Prüfen, ob Backend unter `http://localhost:8080/api/health` antwortet.
 
+- `node`/`npm` nicht gefunden, obwohl nvm installiert ist:
+	`doctor.sh` und `install.sh` sourcen nvm automatisch aus den üblichen Pfaden
+	(`~/.nvm/nvm.sh`, `/opt/homebrew/opt/nvm/nvm.sh`,
+	`/usr/local/opt/nvm/nvm.sh`). Wenn nvm an einem anderen Ort liegt,
+	`nvm alias default <version>` setzen oder `NVM_DIR` exportieren.
+
 ## 8. Verzeichnisüberblick
 
 - `backend/` Go API
 - `frontend/` Angular UI
 - `vector_db/` Persistente Chroma-Daten
+- `doctor.sh` Read-only Umgebungs-Check
+- `install.sh` Setup-Skript (Dependencies, Docker-Image, Backend-Binary)
 - `start-all.sh` Startet Chroma + Backend + Frontend gemeinsam
