@@ -79,4 +79,14 @@ export class QuizService {
   clearApiKey(): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/settings/openai-key`);
   }
+
+  getProvider(): Observable<string> {
+    return this.http.get<{ provider: string }>(`${this.apiUrl}/settings/provider`).pipe(
+      map(res => res.provider)
+    );
+  }
+
+  setProvider(provider: string): Observable<unknown> {
+    return this.http.post(`${this.apiUrl}/settings/provider`, { provider });
+  }
 }
