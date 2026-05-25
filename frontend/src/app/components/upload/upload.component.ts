@@ -14,6 +14,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
 import { QuizService, Chapter, UploadProgressEvent } from '../../services/quiz.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
+import { QuizOptionsDialogComponent, QuizOptions } from '../quiz-options-dialog/quiz-options-dialog.component';
 
 type Provider = 'openai' | 'claude_cli';
 
@@ -217,7 +218,19 @@ export class UploadComponent {
   }
 
   openQuiz(chapter: Chapter): void {
-    this.router.navigate(['/quiz', chapter.id]);
+    const ref = this.dialog.open<QuizOptionsDialogComponent, void, QuizOptions | null>(
+      QuizOptionsDialogComponent,
+    );
+    ref.afterClosed().subscribe(opts => {
+      if (!opts) return;
+      this.router.navigate(['/quiz', chapter.id], {
+        queryParams: {
+          shuffleQ: opts.shuffleQuestions ? 1 : 0,
+          shuffleO: opts.shuffleOptions ? 1 : 0,
+          practice: opts.practiceMode ? 1 : 0,
+        },
+      });
+    });
   }
 
   clearApiKey(): void {

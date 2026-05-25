@@ -36,6 +36,16 @@ export class QuizComponent {
   readonly chapterId = Number(this.route.snapshot.paramMap.get('chapterId'));
   readonly error = signal(this.chapterId > 0 ? '' : 'Ungültige Kapitel-ID.');
 
+  // Quiz options come in as query params from the start dialog. Defaults
+  // here (all off) apply when the quiz is opened directly without going
+  // through the dialog (e.g. a bookmarked /quiz/:id URL).
+  private readonly shuffleQuestionsEnabled =
+    this.route.snapshot.queryParamMap.get('shuffleQ') === '1';
+  private readonly shuffleOptionsEnabled =
+    this.route.snapshot.queryParamMap.get('shuffleO') === '1';
+  private readonly practiceModeEnabled =
+    this.route.snapshot.queryParamMap.get('practice') === '1';
+
   readonly questions = toSignal(
     this.quizService.getQuestions(this.chapterId).pipe(
       catchError((err: Error) => { this.error.set(err.message); return EMPTY; })
@@ -89,12 +99,8 @@ export class QuizComponent {
   });
   readonly answeredCount = computed(() => this.answers().filter(answer => answer.length > 0).length);
 
-  readonly practiceMode = signal(false);
+  readonly practiceMode = signal(this.practiceModeEnabled);
   readonly revealedIndices = signal<ReadonlySet<number>>(new Set<number>());
-
-  // Once any question has been answered, the mode is fixed for the rest
-  // of the session — user picks practice or not before starting.
-  readonly practiceLocked = computed(() => this.answeredCount() > 0);
 
   readonly isCurrentRevealed = computed(() =>
     this.practiceMode() && this.revealedIndices().has(this.currentQuestionIndex())
@@ -148,23 +154,32 @@ export class QuizComponent {
       this.answers.set(new Array(questions.length).fill(null).map(() => []));
       this.currentQuestionIndex.set(0);
       this.revealedIndices.set(new Set<number>());
-      const order = this.shuffledIndices(questions.length);
+      const order = this.shuffleQuestionsEnabled
+        ? this.shuffledIndices(questions.length)
+        : this.identityIndices(questions.length);
       this.displayOrder.set(order);
       // Per-question option permutation, keyed by display question index
       // so it lines up with displayedQuestions / answers / reveals.
       this.optionDisplayOrder.set(
-        order.map(canonicalQIdx => this.shuffledIndices(questions[canonicalQIdx]?.options.length ?? 0)),
+        order.map(canonicalQIdx => {
+          const n = questions[canonicalQIdx]?.options.length ?? 0;
+          return this.shuffleOptionsEnabled ? this.shuffledIndices(n) : this.identityIndices(n);
+        }),
       );
     });
   }
 
   private shuffledIndices(n: number): number[] {
-    const arr = Array.from({ length: n }, (_, i) => i);
+    const arr = this.identityIndices(n);
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
+  }
+
+  private identityIndices(n: number): number[] {
+    return Array.from({ length: n }, (_, i) => i);
   }
 
   readonly displayedResults = computed(() => {

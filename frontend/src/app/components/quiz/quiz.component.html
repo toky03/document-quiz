@@ -10,19 +10,6 @@
 @if (questions().length > 0 && !displayedResults()) {
   <h2 class="quiz-title">Quiz</h2>
 
-  <div class="practice-mode-row">
-    <mat-checkbox
-      [checked]="practiceMode()"
-      [disabled]="practiceLocked()"
-      (change)="practiceMode.set($event.checked)"
-    >
-      Übungsmodus
-    </mat-checkbox>
-    <span class="practice-mode-hint">
-      Antworten und Erklärungen werden direkt nach jeder Frage angezeigt; der Punktestand läuft mit.
-    </span>
-  </div>
-
   @if (practiceMode()) {
     <p class="practice-score">
       Korrekt: <strong>{{ practiceScore().correct }}</strong>
