@@ -23,10 +23,13 @@ if [[ ! -d "$VECTOR_DB_DIR" ]]; then
   mkdir -p "$VECTOR_DB_DIR"
 fi
 
-BACKEND_CMD=("go" "run" ".")
-if [[ -x "$BACKEND_DIR/document-quiz-backend" ]]; then
-  BACKEND_CMD=("$BACKEND_DIR/document-quiz-backend")
-fi
+# Always rebuild before launch so source changes (incl. schema migrations
+# in db.go) take effect. Go's build cache keeps this near-instant when
+# nothing changed. A prebuilt binary that survives across feature branches
+# silently kept running stale schema migrations — don't reintroduce that.
+echo "Backend wird gebaut ..."
+( cd "$BACKEND_DIR" && go build -o document-quiz-backend . )
+BACKEND_CMD=("$BACKEND_DIR/document-quiz-backend")
 
 cleanup() {
   echo
