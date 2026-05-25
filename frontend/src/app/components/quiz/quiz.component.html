@@ -46,23 +46,23 @@
         @if (!isQuestionRevealed(questionIdx)) {
           @if (question.quiz_type === 'single') {
             <mat-radio-group class="options-group" [name]="'q-' + questionIdx">
-              @for (option of question.options; track option; let j = $index) {
+              @for (opt of currentQuestionDisplayedOptions(); track opt.canonicalIdx) {
                 <mat-radio-button
                   class="option"
-                  [value]="j"
-                  [checked]="isChecked(questionIdx, j)"
-                  (change)="toggleOption(questionIdx, j, question.quiz_type)"
-                >{{ option }}</mat-radio-button>
+                  [value]="opt.canonicalIdx"
+                  [checked]="isChecked(questionIdx, opt.canonicalIdx)"
+                  (change)="toggleOption(questionIdx, opt.canonicalIdx, question.quiz_type)"
+                >{{ opt.text }}</mat-radio-button>
               }
             </mat-radio-group>
           } @else {
             <div class="options-group">
-              @for (option of question.options; track option; let optionIdx = $index) {
+              @for (opt of currentQuestionDisplayedOptions(); track opt.canonicalIdx) {
                 <mat-checkbox
                   class="option"
-                  [checked]="isChecked(questionIdx, optionIdx)"
-                  (change)="toggleOption(questionIdx, optionIdx, question.quiz_type)"
-                >{{ option }}</mat-checkbox>
+                  [checked]="isChecked(questionIdx, opt.canonicalIdx)"
+                  (change)="toggleOption(questionIdx, opt.canonicalIdx, question.quiz_type)"
+                >{{ opt.text }}</mat-checkbox>
               }
             </div>
           }
@@ -70,27 +70,27 @@
 
         @if (isQuestionRevealed(questionIdx)) {
           <ul class="option-result-list practice-feedback">
-            @for (option of question.options; track option; let optionIdx = $index) {
+            @for (opt of currentQuestionDisplayedOptions(); track opt.canonicalIdx) {
               <li
                 class="option-result"
-                [class.option-selected-correct]="isCorrectlySelectedOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)"
-                [class.option-selected-wrong]="isWronglySelectedOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)"
-                [class.option-missed-correct]="isMissedCorrectOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)"
+                [class.option-selected-correct]="isCorrectlySelectedOption(answers()[questionIdx] ?? [], question.correct_options, opt.canonicalIdx)"
+                [class.option-selected-wrong]="isWronglySelectedOption(answers()[questionIdx] ?? [], question.correct_options, opt.canonicalIdx)"
+                [class.option-missed-correct]="isMissedCorrectOption(answers()[questionIdx] ?? [], question.correct_options, opt.canonicalIdx)"
               >
-                <span>{{ option }}</span>
+                <span>{{ opt.text }}</span>
 
-                @if (isCorrectlySelectedOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)) {
+                @if (isCorrectlySelectedOption(answers()[questionIdx] ?? [], question.correct_options, opt.canonicalIdx)) {
                   <span class="badge badge-correct">richtig angekreuzt</span>
                 }
-                @if (isWronglySelectedOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)) {
+                @if (isWronglySelectedOption(answers()[questionIdx] ?? [], question.correct_options, opt.canonicalIdx)) {
                   <span class="badge badge-wrong">falsch markiert</span>
                 }
-                @if (isMissedCorrectOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)) {
+                @if (isMissedCorrectOption(answers()[questionIdx] ?? [], question.correct_options, opt.canonicalIdx)) {
                   <span class="badge badge-missed">sollte angekreuzt werden</span>
                 }
 
-                @if (question.explanations && question.explanations[optionIdx]) {
-                  <p class="option-explanation">{{ question.explanations[optionIdx] }}</p>
+                @if (opt.explanation) {
+                  <p class="option-explanation">{{ opt.explanation }}</p>
                 }
               </li>
             }
@@ -150,7 +150,7 @@
       <p class="score">{{ r.correct_count }} / {{ r.total_count }} korrekt</p>
 
       <div class="result-list">
-        @for (item of r.results; track item.index; let i = $index) {
+        @for (item of displayedResultItems(); track item.index; let i = $index) {
           <div class="result-item">
             <h3>
               {{ i + 1 }}. {{ item.question }}
@@ -162,27 +162,27 @@
             </h3>
 
             <ul class="option-result-list">
-              @for (option of item.options; track option; let optionIndex = $index) {
+              @for (opt of item.displayOptions; track opt.canonicalIdx) {
                 <li
                   class="option-result"
-                  [class.option-selected-correct]="isCorrectlySelectedOption(item.user_answer, item.correct_answer, optionIndex)"
-                  [class.option-selected-wrong]="isWronglySelectedOption(item.user_answer, item.correct_answer, optionIndex)"
-                  [class.option-missed-correct]="isMissedCorrectOption(item.user_answer, item.correct_answer, optionIndex)"
+                  [class.option-selected-correct]="isCorrectlySelectedOption(item.user_answer, item.correct_answer, opt.canonicalIdx)"
+                  [class.option-selected-wrong]="isWronglySelectedOption(item.user_answer, item.correct_answer, opt.canonicalIdx)"
+                  [class.option-missed-correct]="isMissedCorrectOption(item.user_answer, item.correct_answer, opt.canonicalIdx)"
                 >
-                  <span>{{ option }}</span>
+                  <span>{{ opt.text }}</span>
 
-                  @if (isCorrectlySelectedOption(item.user_answer, item.correct_answer, optionIndex)) {
+                  @if (isCorrectlySelectedOption(item.user_answer, item.correct_answer, opt.canonicalIdx)) {
                     <span class="badge badge-correct">richtig angekreuzt</span>
                   }
-                  @if (isWronglySelectedOption(item.user_answer, item.correct_answer, optionIndex)) {
+                  @if (isWronglySelectedOption(item.user_answer, item.correct_answer, opt.canonicalIdx)) {
                     <span class="badge badge-wrong">falsch markiert</span>
                   }
-                  @if (isMissedCorrectOption(item.user_answer, item.correct_answer, optionIndex)) {
+                  @if (isMissedCorrectOption(item.user_answer, item.correct_answer, opt.canonicalIdx)) {
                     <span class="badge badge-missed">sollte angekreuzt werden</span>
                   }
 
-                  @if (item.explanations && item.explanations[optionIndex]) {
-                    <p class="option-explanation">{{ item.explanations[optionIndex] }}</p>
+                  @if (opt.explanation) {
+                    <p class="option-explanation">{{ opt.explanation }}</p>
                   }
                 </li>
               }

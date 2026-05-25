@@ -50,6 +50,13 @@ export class QuizComponent {
   // anything else: `answers`, `revealedIndices`, etc. all remain keyed
   // by display position; we only translate to canonical on submit.
   readonly displayOrder = signal<number[]>([]);
+  // optionDisplayOrder[displayQIdx] is the permutation of canonical
+  // option indices for the question shown at displayQIdx. answers[] /
+  // correct_options[] / explanations[] are stored in canonical option
+  // order; the template iterates display order but always references
+  // the original canonical index, so the rest of the component stays
+  // unchanged.
+  readonly optionDisplayOrder = signal<number[][]>([]);
   readonly totalQuestions = computed(() => this.questions().length);
 
   readonly displayedQuestions = computed(() => {
@@ -57,6 +64,20 @@ export class QuizComponent {
     const order = this.displayOrder();
     if (order.length !== qs.length) return qs;
     return order.map(i => qs[i]);
+  });
+
+  readonly currentQuestionDisplayedOptions = computed(() => {
+    const q = this.currentQuestion();
+    if (!q) return [] as Array<{ canonicalIdx: number; text: string; explanation: string }>;
+    const order = this.optionDisplayOrder()[this.currentQuestionIndex()];
+    const useOrder = order && order.length === q.options.length
+      ? order
+      : q.options.map((_, i) => i);
+    return useOrder.map(canonicalIdx => ({
+      canonicalIdx,
+      text: q.options[canonicalIdx],
+      explanation: q.explanations?.[canonicalIdx] ?? '',
+    }));
   });
   readonly allAnswered = computed(() => {
     const questions = this.questions();
@@ -127,7 +148,13 @@ export class QuizComponent {
       this.answers.set(new Array(questions.length).fill(null).map(() => []));
       this.currentQuestionIndex.set(0);
       this.revealedIndices.set(new Set<number>());
-      this.displayOrder.set(this.shuffledIndices(questions.length));
+      const order = this.shuffledIndices(questions.length);
+      this.displayOrder.set(order);
+      // Per-question option permutation, keyed by display question index
+      // so it lines up with displayedQuestions / answers / reveals.
+      this.optionDisplayOrder.set(
+        order.map(canonicalQIdx => this.shuffledIndices(questions[canonicalQIdx]?.options.length ?? 0)),
+      );
     });
   }
 
@@ -149,6 +176,24 @@ export class QuizComponent {
       ...r,
       results: order.map(i => r.results[i]),
     };
+  });
+
+  readonly displayedResultItems = computed(() => {
+    const r = this.displayedResults();
+    if (!r) return [];
+    const optionOrders = this.optionDisplayOrder();
+    return r.results.map((item, displayQIdx) => {
+      const optOrder = optionOrders[displayQIdx];
+      const useOrder = optOrder && optOrder.length === item.options.length
+        ? optOrder
+        : item.options.map((_, i) => i);
+      const displayOptions = useOrder.map(canonicalIdx => ({
+        canonicalIdx,
+        text: item.options[canonicalIdx],
+        explanation: item.explanations?.[canonicalIdx] ?? '',
+      }));
+      return { ...item, displayOptions };
+    });
   });
 
   previousQuestion(): void {
