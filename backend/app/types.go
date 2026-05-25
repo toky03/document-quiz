@@ -36,6 +36,7 @@ type QuizEvaluation struct {
 	IsCorrect     bool     `json:"is_correct"`
 	Options       []string `json:"options"`
 	QuizType      string   `json:"quiz_type"`
+	Explanations  []string `json:"explanations,omitempty"`
 }
 
 type QuizEvaluationResult struct {
@@ -59,6 +60,7 @@ type QuizQuestion struct {
 	Options        []string `json:"options"`
 	CorrectOptions []int    `json:"correct_options"`
 	Answer         string   `json:"answer"`
+	Explanations   []string `json:"explanations,omitempty"`
 }
 
 type VectorChunk struct {

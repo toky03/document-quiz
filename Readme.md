@@ -7,17 +7,16 @@ Diese Anleitung beschreibt den **erstmaligen Start** des Projekts auf Linux/macO
 Bitte stelle sicher, dass folgende Tools installiert sind:
 
 - Docker
-- Go (empfohlen: 1.23+)
-- Node.js (empfohlen: 20+)
+- Go 1.24+
+- Node.js 20.19+ oder 22.12+ (Angular 21)
 - npm
+- Optional: Claude Code CLI (`claude`) — nur wenn der Anbieter `claude_cli` verwendet werden soll (siehe Abschnitt 5)
 
-Optional zur Prüfung:
+Statt manuell zu prüfen kannst du `./doctor.sh` ausführen — das Skript meldet
+fehlende oder zu alte Versionen.
 
 ```bash
-docker --version
-go version
-node -v
-npm -v
+./doctor.sh
 ```
 
 ## 2. Projekt klonen und ins Verzeichnis wechseln
@@ -29,12 +28,23 @@ cd document-quiz
 
 ## 3. Abhängigkeiten einmalig installieren
 
+Der schnellste Weg ist das Setup-Skript im Projektroot:
+
+```bash
+./install.sh
+```
+
+Es ruft zuerst `./doctor.sh` auf, lädt anschließend Backend- und
+Frontend-Abhängigkeiten, zieht das Chroma-Docker-Image vor und baut das
+Backend-Binary.
+
+Manuell (Alternative):
+
 ### Backend
 
 ```bash
 cd backend
 go mod download
-go mod tidy
 cd ..
 ```
 
@@ -42,7 +52,7 @@ cd ..
 
 ```bash
 cd frontend
-npm install
+npm ci
 cd ..
 ```
 
@@ -68,14 +78,39 @@ Danach ist die Anwendung erreichbar unter:
 
 Beenden mit `Strg + C` im Terminal, in dem `./start-all.sh` läuft.
 
-## 5. OpenAI API Key setzen
+## 5. LLM-Anbieter wählen
 
-Für Upload/Quiz-Generierung wird ein OpenAI API Key benötigt.
+Im Upload-Dialog gibt es eine Auswahl zwischen zwei Anbietern:
 
-Der Key kann in der Anwendung hinterlegt werden (Settings), alternativ über den Backend-Endpunkt:
+### OpenAI (Standard)
+
+Benötigt einen OpenAI API Key. Der Key kann direkt in der UI hinterlegt
+werden, alternativ per Backend-Endpunkt:
 
 ```http
 POST /api/settings/openai-key
+```
+
+In diesem Modus werden zusätzlich Embeddings in Chroma gespeichert
+(ebenfalls über die OpenAI-API).
+
+### Claude CLI (lokal, ohne API Key)
+
+Verwendet die lokal installierte `claude` CLI. Voraussetzungen:
+
+- `claude` ist auf `PATH` (`brew install claude` o. ä.)
+- `claude login` wurde einmalig ausgeführt (z. B. mit einem Max-Abo)
+
+In diesem Modus wird **kein API Key** benötigt und Chroma wird **nicht**
+beschrieben — das Backend ruft `claude -p --output-format json` auf und
+gibt die generierten Fragen direkt in SQLite.
+
+Der aktive Anbieter wird im Setting `llm_provider` (Werte: `openai`,
+`claude_cli`) gespeichert. Endpunkte:
+
+```http
+GET  /api/settings/provider
+POST /api/settings/provider     {"provider":"openai"|"claude_cli"}
 ```
 
 ## 6. Manueller Start (Alternative)
@@ -108,10 +143,13 @@ npm run start
 
 ## 7. Häufige Probleme
 
-- `permission denied` bei `./start-all.sh`:
+Bei Problemen zuerst `./doctor.sh` ausführen — meldet fehlende oder
+inkompatible Versionen von Node, Go und Docker.
+
+- `permission denied` bei `./start-all.sh` / `./install.sh` / `./doctor.sh`:
 
 	```bash
-	chmod +x start-all.sh
+	chmod +x start-all.sh install.sh doctor.sh
 	```
 
 - Port belegt (`4200`, `8080` oder `8000`):
@@ -123,9 +161,20 @@ npm run start
 - Frontend kann Backend nicht erreichen:
 	Prüfen, ob Backend unter `http://localhost:8080/api/health` antwortet.
 
+- `claude CLI nicht gefunden` beim Upload mit Anbieter `claude_cli`:
+	`claude` installieren und `claude login` ausführen, dann das Backend neu starten.
+
+- `node`/`npm` nicht gefunden, obwohl nvm installiert ist:
+	`doctor.sh` und `install.sh` sourcen nvm automatisch aus den üblichen Pfaden
+	(`~/.nvm/nvm.sh`, `/opt/homebrew/opt/nvm/nvm.sh`,
+	`/usr/local/opt/nvm/nvm.sh`). Wenn nvm an einem anderen Ort liegt,
+	`nvm alias default <version>` setzen oder `NVM_DIR` exportieren.
+
 ## 8. Verzeichnisüberblick
 
 - `backend/` Go API
 - `frontend/` Angular UI
-- `vector_db/` Persistente Chroma-Daten
+- `vector_db/` Persistente Chroma-Daten (nur Anbieter `openai`)
+- `doctor.sh` Read-only Umgebungs-Check
+- `install.sh` Setup-Skript (Dependencies, Docker-Image, Backend-Binary)
 - `start-all.sh` Startet Chroma + Backend + Frontend gemeinsam

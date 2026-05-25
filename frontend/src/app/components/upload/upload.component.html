@@ -5,18 +5,34 @@
 
   <mat-card-content>
     <mat-form-field appearance="outline" class="full-width">
-      <mat-label>Model</mat-label>
-      <input matInput [(ngModel)]="model" placeholder="z. B. gpt-4.1-mini" />
+      <mat-label>Anbieter</mat-label>
+      <mat-select [value]="provider()" (selectionChange)="onProviderChange($event.value)">
+        <mat-option value="openai">OpenAI (API-Key)</mat-option>
+        <mat-option value="claude_cli">Claude CLI (lokal, Max-Abo)</mat-option>
+      </mat-select>
     </mat-form-field>
 
-    @if (hasSavedApiKey()) {
-      <p class="muted">Gespeicherter API-Key wird verwendet.</p>
-      <button mat-stroked-button color="warn" (click)="clearApiKey()">API-Key löschen</button>
-    } @else {
     <mat-form-field appearance="outline" class="full-width">
-      <mat-label>OpenAI API Key</mat-label>
-      <input matInput [(ngModel)]="apiKey" type="password" placeholder="sk-..." />
+      <mat-label>Model</mat-label>
+      <input matInput [(ngModel)]="model"
+             [placeholder]="isOpenAI() ? 'z. B. gpt-4.1-mini' : 'z. B. sonnet, opus, haiku (leer = Default)'" />
     </mat-form-field>
+
+    @if (isOpenAI()) {
+      @if (hasSavedApiKey()) {
+        <p class="muted">Gespeicherter API-Key wird verwendet.</p>
+        <button mat-stroked-button color="warn" (click)="clearApiKey()">API-Key löschen</button>
+      } @else {
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>OpenAI API Key</mat-label>
+          <input matInput [(ngModel)]="apiKey" type="password" placeholder="sk-..." />
+        </mat-form-field>
+      }
+    } @else {
+      <p class="muted">
+        Verwendet die lokale <code>claude</code> CLI. Stelle sicher, dass
+        <code>claude login</code> ausgeführt wurde. Keine API-Keys werden gespeichert.
+      </p>
     }
 
 
@@ -41,6 +57,21 @@
       {{ isLoading() ? 'Verarbeite...' : 'Upload starten' }}
     </button>
   }
+
+  @if (isLoading()) {
+    <mat-card-content class="progress-block">
+      @if (progressTotal() > 0) {
+        <p class="progress-line">
+          <strong>Datei {{ progressIndex() }} / {{ progressTotal() }}</strong>
+          @if (progressFile()) { — {{ progressFile() }} }
+        </p>
+      }
+      @if (progressStageLabel()) {
+        <p class="progress-line muted">{{ progressStageLabel() }}</p>
+      }
+      <p class="progress-line muted">Laufzeit: {{ progressElapsedSec() }}s</p>
+    </mat-card-content>
+  }
   <mat-card-actions align="start">
 
   </mat-card-actions>
@@ -61,9 +92,20 @@
     @if (chapterList().length === 0) {
       <p class="muted">Noch keine Kapitel vorhanden.</p>
     } @else {
+      <p class="muted disaster-hint">
+        Disaster Mode: Kapitel ankreuzen, dann <strong>Disaster starten</strong>.
+        Jede Frage muss zweimal in Folge richtig beantwortet werden — eine falsche
+        Antwort setzt den Streak auf 0.
+      </p>
       <mat-list>
         @for (chapter of chapterList(); track chapter.id) {
           <mat-list-item>
+            <mat-checkbox
+              matListItemIcon
+              [checked]="isDisasterSelected(chapter)"
+              (change)="toggleDisasterSelection(chapter)"
+              [attr.aria-label]="'Kapitel ' + chapter.title + ' für Disaster Mode auswählen'"
+            ></mat-checkbox>
             <span matListItemTitle>{{ chapter.title }}</span>
             <div matListItemMeta><button mat-stroked-button color="primary"  (click)="openQuiz(chapter)">Quiz starten</button></div>
             <div matListItemMeta><button mat-flat-button class="btn-warn" (click)="deleteChapter(chapter)"><mat-icon>delete</mat-icon>Löschen</button></div>
@@ -71,6 +113,18 @@
           </mat-list-item>
         }
       </mat-list>
+
+      <div class="disaster-row">
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="startDisasterMode()"
+          [disabled]="disasterSelectionCount() === 0"
+        >
+          <mat-icon>local_fire_department</mat-icon>
+          Disaster starten ({{ disasterSelectionCount() }} Kapitel)
+        </button>
+      </div>
     }
   </mat-card-content>
 </mat-card>

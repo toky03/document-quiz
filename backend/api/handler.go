@@ -22,6 +22,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings/openai-key-status", h.handleAPIKeyStatus)
 	mux.HandleFunc("POST /api/settings/openai-key", h.handleSaveAPIKey)
 	mux.HandleFunc("DELETE /api/settings/openai-key", h.handleClearAPIKey)
+	mux.HandleFunc("GET /api/settings/provider", h.handleGetProvider)
+	mux.HandleFunc("POST /api/settings/provider", h.handleSetProvider)
 	mux.HandleFunc("POST /api/upload", h.handleFileUpload)
 	mux.HandleFunc("GET /api/chapters", h.handleGetChapters)
 	mux.HandleFunc("DELETE /api/chapters/{id}", h.handleDeleteChapter)
@@ -31,6 +33,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 type SaveAPIKeyRequest struct {
 	APIKey string `json:"api_key"`
+}
+
+type SetProviderRequest struct {
+	Provider string `json:"provider"`
 }
 
 type QuizSubmitRequest struct {
@@ -79,35 +85,36 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	result, err := h.service.UploadDocuments(r.Context(), app.UploadCommand{
+	// Stream progress as newline-delimited JSON (NDJSON). Each line is one
+	// app.ProgressEvent; the final line is {"event":"done", ...} on success
+	// or {"event":"error", ...} on hard failure.
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, _ := w.(http.Flusher)
+	encoder := json.NewEncoder(w)
+	emit := func(ev app.ProgressEvent) {
+		if err := encoder.Encode(ev); err != nil {
+			return
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+
+	_, err := h.service.UploadDocuments(r.Context(), app.UploadCommand{
 		Model:  model,
 		APIKey: apiKey,
 		Files:  uploadedFiles,
-	})
+	}, emit)
 	if err != nil {
-		if isBadRequestError(err) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": toUserError(err)})
-			return
-		}
-		writeJSON(
-			w,
-			http.StatusInternalServerError,
-			map[string]string{"error": "Verarbeitung fehlgeschlagen"},
-		)
-		return
+		emit(app.ProgressEvent{
+			Event:   "error",
+			Message: toUserError(err),
+		})
 	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"message":            "Verarbeitung abgeschlossen",
-		"processed_files":    result.ProcessedFiles,
-		"successful_files":   result.SuccessfulFiles,
-		"failed_files":       result.FailedFiles,
-		"error_count":        result.ErrorCount,
-		"issues":             result.Issues,
-		"generated_chapters": result.GeneratedChapters,
-		"generated_pairs":    result.GeneratedPairs,
-		"total_chunks":       result.TotalChunks,
-	})
 }
 
 func (h *Handler) handleClearAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +150,34 @@ func (h *Handler) handleSaveAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"saved": true})
+}
+
+func (h *Handler) handleGetProvider(w http.ResponseWriter, r *http.Request) {
+	provider, err := h.service.GetProvider(r.Context())
+	if err != nil {
+		writeJSON(
+			w,
+			http.StatusInternalServerError,
+			map[string]string{"error": "Provider konnte nicht geladen werden"},
+		)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"provider": provider})
+}
+
+func (h *Handler) handleSetProvider(w http.ResponseWriter, r *http.Request) {
+	var req SetProviderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Ungültige Anfrage"})
+		return
+	}
+
+	if err := h.service.SetProvider(r.Context(), req.Provider); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": toUserError(err)})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"provider": req.Provider})
 }
 
 func (h *Handler) handleAPIKeyStatus(w http.ResponseWriter, r *http.Request) {
@@ -223,6 +258,12 @@ func (h *Handler) handleGetChapterQuestions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// The full QuizQuestion shape (incl. correct_options and explanations)
+	// is sent to the client. This endpoint trusts the client — practice mode
+	// needs the explanations during play, and `correct_options` is already
+	// exposed by this endpoint for the existing results-page rendering. If
+	// stricter cheat-prevention becomes a requirement, evaluate per-answer
+	// on the server via a stateful submit-one endpoint instead.
 	writeJSON(w, http.StatusOK, questions)
 }
 
