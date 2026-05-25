@@ -7,7 +7,7 @@
   <p class="error-text">{{ error() }}</p>
 }
 
-@if (questions().length > 0 && !result()) {
+@if (questions().length > 0 && !displayedResults()) {
   <h2 class="quiz-title">Quiz</h2>
 
   <div class="practice-mode-row">
@@ -141,7 +141,7 @@
   }
 }
 
-@if (result(); as r) {
+@if (displayedResults(); as r) {
   <mat-card class="result-card">
     <mat-card-header>
       <mat-card-title>Ergebnis</mat-card-title>
@@ -150,10 +150,10 @@
       <p class="score">{{ r.correct_count }} / {{ r.total_count }} korrekt</p>
 
       <div class="result-list">
-        @for (item of r.results; track item.index) {
+        @for (item of r.results; track item.index; let i = $index) {
           <div class="result-item">
             <h3>
-              {{ item.index + 1 }}. {{ item.question }}
+              {{ i + 1 }}. {{ item.question }}
               @if (item.is_correct) {
                 <span class="status status-correct">Korrekt</span>
               } @else {

@@ -45,7 +45,19 @@ export class QuizComponent {
 
   readonly answers = signal<number[][]>([]);
   readonly currentQuestionIndex = signal(0);
+  // displayOrder[i] is the canonical index of the question shown at
+  // position i. Lets us shuffle the play order without renaming
+  // anything else: `answers`, `revealedIndices`, etc. all remain keyed
+  // by display position; we only translate to canonical on submit.
+  readonly displayOrder = signal<number[]>([]);
   readonly totalQuestions = computed(() => this.questions().length);
+
+  readonly displayedQuestions = computed(() => {
+    const qs = this.questions();
+    const order = this.displayOrder();
+    if (order.length !== qs.length) return qs;
+    return order.map(i => qs[i]);
+  });
   readonly allAnswered = computed(() => {
     const questions = this.questions();
     const givenAnswers = this.answers();
@@ -68,13 +80,13 @@ export class QuizComponent {
   );
 
   readonly practiceScore = computed(() => {
-    const questions = this.questions();
+    const displayed = this.displayedQuestions();
     const answers = this.answers();
     const revealed = this.revealedIndices();
     let correct = 0;
     let wrong = 0;
     for (const idx of revealed) {
-      const q = questions[idx];
+      const q = displayed[idx];
       if (!q) continue;
       if (this.isAnswerCorrect(answers[idx] ?? [], q.correct_options)) {
         correct++;
@@ -82,7 +94,7 @@ export class QuizComponent {
         wrong++;
       }
     }
-    return { correct, wrong, open: questions.length - correct - wrong };
+    return { correct, wrong, open: displayed.length - correct - wrong };
   });
   readonly progressPercent = computed(() => {
     const total = this.totalQuestions();
@@ -92,7 +104,7 @@ export class QuizComponent {
     return (this.answeredCount() / total) * 100;
   });
   readonly currentQuestion = computed(() => {
-    const questions = this.questions();
+    const questions = this.displayedQuestions();
     const index = this.currentQuestionIndex();
     return questions[index];
   });
@@ -114,8 +126,30 @@ export class QuizComponent {
       const questions = this.questions();
       this.answers.set(new Array(questions.length).fill(null).map(() => []));
       this.currentQuestionIndex.set(0);
+      this.revealedIndices.set(new Set<number>());
+      this.displayOrder.set(this.shuffledIndices(questions.length));
     });
   }
+
+  private shuffledIndices(n: number): number[] {
+    const arr = Array.from({ length: n }, (_, i) => i);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  readonly displayedResults = computed(() => {
+    const r = this.result();
+    if (!r) return null;
+    const order = this.displayOrder();
+    if (order.length !== r.results.length) return r;
+    return {
+      ...r,
+      results: order.map(i => r.results[i]),
+    };
+  });
 
   previousQuestion(): void {
     this.currentQuestionIndex.update(index => Math.max(0, index - 1));
@@ -185,7 +219,17 @@ export class QuizComponent {
       return;
     }
     this.error.set('');
-    this.submitTrigger$.next(this.answers());
+
+    // The backend zips the answers array against questions in canonical
+    // (id ASC) order, so translate from display order before sending.
+    const order = this.displayOrder();
+    const displayed = this.answers();
+    const canonical: number[][] = new Array(displayed.length).fill(null).map(() => []);
+    for (let i = 0; i < displayed.length; i++) {
+      const canonicalIdx = order[i] ?? i;
+      canonical[canonicalIdx] = displayed[i];
+    }
+    this.submitTrigger$.next(canonical);
   }
 
   reveal(): void {
