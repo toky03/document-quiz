@@ -63,6 +63,12 @@ Mische Single-Choice- und Multiple-Choice-Fragen.
 Jede Frage muss genau %d Antwortoptionen haben.
 Nutze ausschließlich den Kontext.
 
+Jede Frage muss eigenständig verständlich sein und darf nicht auf das
+Ausgangsdokument verweisen. Vermeide Formulierungen wie „laut Text",
+„im Dokument", „im Kapitel oben", „in der Abbildung", „auf Seite X" oder
+ähnliche Bezüge auf die Quelle. Die Frage soll auch ohne Kenntnis des
+Kontexts gestellt werden können.
+
 Zu jeder Antwortoption gehört eine kurze Erklärung (1–2 Sätze, auf Deutsch),
 warum diese Option richtig oder falsch ist. Die Erklärungen müssen dieselbe
 Reihenfolge wie die Optionen haben.
