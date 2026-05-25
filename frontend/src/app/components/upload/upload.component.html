@@ -92,9 +92,20 @@
     @if (chapterList().length === 0) {
       <p class="muted">Noch keine Kapitel vorhanden.</p>
     } @else {
+      <p class="muted disaster-hint">
+        Disaster Mode: Kapitel ankreuzen, dann <strong>Disaster starten</strong>.
+        Jede Frage muss zweimal in Folge richtig beantwortet werden — eine falsche
+        Antwort setzt den Streak auf 0.
+      </p>
       <mat-list>
         @for (chapter of chapterList(); track chapter.id) {
           <mat-list-item>
+            <mat-checkbox
+              matListItemIcon
+              [checked]="isDisasterSelected(chapter)"
+              (change)="toggleDisasterSelection(chapter)"
+              [attr.aria-label]="'Kapitel ' + chapter.title + ' für Disaster Mode auswählen'"
+            ></mat-checkbox>
             <span matListItemTitle>{{ chapter.title }}</span>
             <div matListItemMeta><button mat-stroked-button color="primary"  (click)="openQuiz(chapter)">Quiz starten</button></div>
             <div matListItemMeta><button mat-flat-button class="btn-warn" (click)="deleteChapter(chapter)"><mat-icon>delete</mat-icon>Löschen</button></div>
@@ -102,6 +113,18 @@
           </mat-list-item>
         }
       </mat-list>
+
+      <div class="disaster-row">
+        <button
+          mat-flat-button
+          color="primary"
+          (click)="startDisasterMode()"
+          [disabled]="disasterSelectionCount() === 0"
+        >
+          <mat-icon>local_fire_department</mat-icon>
+          Disaster starten ({{ disasterSelectionCount() }} Kapitel)
+        </button>
+      </div>
     }
   </mat-card-content>
 </mat-card>

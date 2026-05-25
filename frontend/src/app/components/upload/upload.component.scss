@@ -66,3 +66,14 @@ mat-list-item {
 .progress-line.muted {
   color: var(--mat-sys-on-surface-variant);
 }
+
+.disaster-hint {
+  margin: 4px 0 12px;
+  font-size: 0.9rem;
+}
+
+.disaster-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}

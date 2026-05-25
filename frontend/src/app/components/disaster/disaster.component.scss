@@ -1,0 +1,158 @@
+.quiz-title {
+  margin: 16px 0 8px;
+}
+
+.disaster-status {
+  margin: 4px 0 12px;
+  font-size: 0.95rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.disaster-status strong {
+  color: var(--mat-sys-on-surface);
+  font-weight: 600;
+}
+
+.question-card {
+  margin-bottom: 16px;
+}
+
+.quiz-type-chip,
+.streak-chip {
+  --mdc-chip-container-height: 24px;
+  --mdc-chip-label-text-size: 0.72rem;
+  --mdc-chip-label-text-weight: 500;
+  --mdc-chip-elevated-container-color: var(--mat-sys-surface-container-low);
+  --mdc-chip-label-text-color: var(--mat-sys-on-surface-variant);
+  opacity: 0.85;
+  margin-right: 6px;
+}
+
+.navigation-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.quiz-progress-bar {
+  margin: 0 0 16px;
+}
+
+.options-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.option {
+  display: block;
+}
+
+.result-card {
+  margin-top: 16px;
+}
+
+.result-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  flex-wrap: wrap;
+}
+
+.status {
+  font-size: 0.78rem;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 600;
+}
+
+.status-correct {
+  background: #e6f4ea;
+  color: #1e8e3e;
+}
+
+.status-incorrect {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.option-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.practice-feedback {
+  margin-top: 8px;
+}
+
+.option-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+.option-explanation {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.option-selected-correct {
+  background: #e6f4ea;
+}
+
+.option-selected-wrong {
+  background: #fce8e6;
+}
+
+.option-missed-correct {
+  background: #fff7e0;
+}
+
+.badge {
+  margin-left: auto;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 500;
+}
+
+.badge-correct {
+  background: #d6eadb;
+  color: #1e8e3e;
+}
+
+.badge-wrong {
+  background: #fad2cf;
+  color: #a50e0e;
+}
+
+.badge-missed {
+  background: #fef0c3;
+  color: #8a5a00;
+}
+
+@media (max-width: 640px) {
+  .navigation-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .navigation-row button {
+    width: 100%;
+  }
+}

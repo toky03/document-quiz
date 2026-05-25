@@ -1,0 +1,126 @@
+<a mat-button routerLink="/">
+  <mat-icon>arrow_back</mat-icon>
+  Zurück
+</a>
+
+@if (error()) {
+  <p class="error-text">{{ error() }}</p>
+}
+
+@if (isLoading()) {
+  <p class="muted">Fragen werden geladen...</p>
+}
+
+@if (!isLoading() && entries().length > 0) {
+  <h2 class="quiz-title">Disaster Mode</h2>
+
+  <p class="disaster-status">
+    Geschafft: <strong>{{ completedCount() }}</strong> / {{ totalQuestions() }}
+    · Offen: <strong>{{ remainingCount() }}</strong>
+  </p>
+  <mat-progress-bar class="quiz-progress-bar" mode="determinate" [value]="progressPercent()"></mat-progress-bar>
+
+  @if (gameDone()) {
+    <mat-card class="result-card">
+      <mat-card-header>
+        <mat-card-title>Geschafft!</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p>Alle {{ totalQuestions() }} Fragen wurden je zweimal in Folge korrekt beantwortet.</p>
+        <div class="navigation-row">
+          <button mat-stroked-button routerLink="/">Zur Startseite</button>
+          <button mat-raised-button color="primary" (click)="restart()">Neu starten</button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  } @else if (currentEntry(); as e) {
+    <mat-card class="question-card">
+      <mat-card-header>
+        <mat-card-title>{{ e.question.question }}</mat-card-title>
+        <mat-card-subtitle>
+          <mat-chip class="quiz-type-chip">{{ e.question.quiz_type === 'single' ? 'Einfachauswahl' : 'Mehrfachauswahl' }}</mat-chip>
+          <mat-chip class="streak-chip">Streak: {{ currentStreak() }} / 2</mat-chip>
+        </mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        @if (!resultRevealed()) {
+          @if (e.question.quiz_type === 'single') {
+            <mat-radio-group class="options-group" name="disaster-q">
+              @for (opt of e.question.options; track $index; let i = $index) {
+                <mat-radio-button
+                  class="option"
+                  [value]="i"
+                  [checked]="isChecked(i)"
+                  (change)="toggleOption(i, e.question.quiz_type)"
+                >{{ opt }}</mat-radio-button>
+              }
+            </mat-radio-group>
+          } @else {
+            <div class="options-group">
+              @for (opt of e.question.options; track $index; let i = $index) {
+                <mat-checkbox
+                  class="option"
+                  [checked]="isChecked(i)"
+                  (change)="toggleOption(i, e.question.quiz_type)"
+                >{{ opt }}</mat-checkbox>
+              }
+            </div>
+          }
+        } @else {
+          <ul class="option-result-list practice-feedback">
+            @for (opt of e.question.options; track $index; let i = $index) {
+              <li
+                class="option-result"
+                [class.option-selected-correct]="isCorrectlySelectedOption(selectedOptions(), e.question.correct_options, i)"
+                [class.option-selected-wrong]="isWronglySelectedOption(selectedOptions(), e.question.correct_options, i)"
+                [class.option-missed-correct]="isMissedCorrectOption(selectedOptions(), e.question.correct_options, i)"
+              >
+                <span>{{ opt }}</span>
+                @if (isCorrectlySelectedOption(selectedOptions(), e.question.correct_options, i)) {
+                  <span class="badge badge-correct">richtig angekreuzt</span>
+                }
+                @if (isWronglySelectedOption(selectedOptions(), e.question.correct_options, i)) {
+                  <span class="badge badge-wrong">falsch markiert</span>
+                }
+                @if (isMissedCorrectOption(selectedOptions(), e.question.correct_options, i)) {
+                  <span class="badge badge-missed">sollte angekreuzt werden</span>
+                }
+                @if (e.question.explanations?.[i]) {
+                  <p class="option-explanation">{{ e.question.explanations?.[i] }}</p>
+                }
+              </li>
+            }
+          </ul>
+
+          @if (lastWasCorrect()) {
+            <p class="result-line">
+              <span class="status status-correct">Richtig</span>
+              @if (currentStreak() >= 2) {
+                Frage abgehakt.
+              } @else {
+                Streak: {{ currentStreak() }} / 2 — noch einmal in Folge richtig und die Frage ist erledigt.
+              }
+            </p>
+          } @else {
+            <p class="result-line">
+              <span class="status status-incorrect">Falsch</span>
+              Streak zurückgesetzt auf 0.
+            </p>
+          }
+        }
+      </mat-card-content>
+    </mat-card>
+
+    <div class="navigation-row">
+      @if (!resultRevealed()) {
+        <button mat-raised-button color="primary" (click)="submit()" [disabled]="!hasSelection()">
+          Antwort prüfen
+        </button>
+      } @else {
+        <button mat-raised-button color="primary" (click)="continueNext()">
+          Weiter
+        </button>
+      }
+    </div>
+  }
+}

@@ -11,6 +11,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { QuizService, Chapter, UploadProgressEvent } from '../../services/quiz.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
@@ -31,6 +32,7 @@ type Provider = 'openai' | 'claude_cli';
     MatListModule,
     MatProgressSpinnerModule,
     MatSelectModule,
+    MatCheckboxModule,
   ],
   templateUrl: './upload.component.html',
   styleUrl: './upload.component.scss'
@@ -126,6 +128,9 @@ export class UploadComponent {
 
   readonly chapterList = computed(() => this.chapters() ?? []);
 
+  readonly disasterSelection = signal<ReadonlySet<number>>(new Set<number>());
+  readonly disasterSelectionCount = computed(() => this.disasterSelection().size);
+
   private elapsedTimer: ReturnType<typeof setInterval> | null = null;
 
   private startElapsedTimer(): void {
@@ -217,6 +222,30 @@ export class UploadComponent {
     void this.runStreamingUpload(this.files(), this.model, this.apiKey);
   }
 
+  isDisasterSelected(chapter: Chapter): boolean {
+    return this.disasterSelection().has(chapter.id);
+  }
+
+  toggleDisasterSelection(chapter: Chapter): void {
+    this.disasterSelection.update(prev => {
+      const next = new Set(prev);
+      if (next.has(chapter.id)) {
+        next.delete(chapter.id);
+      } else {
+        next.add(chapter.id);
+      }
+      return next;
+    });
+  }
+
+  startDisasterMode(): void {
+    const ids = [...this.disasterSelection()];
+    if (ids.length === 0) return;
+    this.router.navigate(['/disaster'], {
+      queryParams: { chapters: ids.join(',') },
+    });
+  }
+
   openQuiz(chapter: Chapter): void {
     const ref = this.dialog.open<QuizOptionsDialogComponent, void, QuizOptions | null>(
       QuizOptionsDialogComponent,
@@ -280,6 +309,12 @@ export class UploadComponent {
         )
       )
     ).subscribe(() => {
+      this.disasterSelection.update(prev => {
+        if (!prev.has(chapter.id)) return prev;
+        const next = new Set(prev);
+        next.delete(chapter.id);
+        return next;
+      });
       this.refreshTrigger$.next();
     });
   }
