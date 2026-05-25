@@ -1,42 +1,47 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
-	"regexp"
-	"sort"
+	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
 )
 
-type OpenAILLM struct {
+type ClaudeCLILLM struct {
 	maxCharsPerChapter int
 	quizOptionCount    int
+	timeout            time.Duration
+	binaryPath         string
 }
 
-func NewOpenAILLM(maxCharsPerChapter, quizOptionCount int) *OpenAILLM {
-	return &OpenAILLM{
+func NewClaudeCLILLM(maxCharsPerChapter, quizOptionCount int) *ClaudeCLILLM {
+	return &ClaudeCLILLM{
 		maxCharsPerChapter: maxCharsPerChapter,
 		quizOptionCount:    quizOptionCount,
+		timeout:            5 * time.Minute,
+		binaryPath:         "claude",
 	}
 }
 
-type llmQuestionPayload struct {
-	Question       string   `json:"question"`
-	QuizType       string   `json:"quiz_type"`
-	Options        []string `json:"options"`
-	CorrectOptions []int    `json:"correct_options"`
-	Explanations   []string `json:"explanations"`
+type claudeCLIResult struct {
+	Type    string `json:"type"`
+	Subtype string `json:"subtype"`
+	IsError bool   `json:"is_error"`
+	Result  string `json:"result"`
 }
 
-func (l *OpenAILLM) GenerateQA(
+// GenerateQA shells out to the local `claude` CLI. The `apiKey` argument is
+// ignored: authentication is whatever the CLI already has (OAuth/Max
+// subscription via `claude login`). The `model` argument is forwarded as
+// --model when non-empty (e.g. "sonnet", "opus", "haiku").
+func (l *ClaudeCLILLM) GenerateQA(
 	ctx context.Context,
-	model, apiKey, chapterTitle, contextText string,
+	model, _, chapterTitle, contextText string,
 	qaCount int,
 ) ([]QuizQuestion, error) {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -45,17 +50,8 @@ func (l *OpenAILLM) GenerateQA(
 	if trimmedContext == "" {
 		return nil, fmt.Errorf("kein Kontext für LLM-Generierung vorhanden")
 	}
-
 	if len(trimmedContext) > l.maxCharsPerChapter {
 		trimmedContext = trimmedContext[:l.maxCharsPerChapter]
-	}
-
-	client, err := openai.New(
-		openai.WithToken(apiKey),
-		openai.WithModel(model),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("LLM-Client konnte nicht initialisiert werden: %w", err)
 	}
 
 	prompt := fmt.Sprintf(`Erzeuge %d Quizfragen auf Deutsch für das Kapitel "%s".
@@ -83,20 +79,50 @@ Antworte nur als gültiges JSON im Format:
 Die Indizes in correct_options sind 0-basiert. Das explanations-Array muss
 genauso viele Einträge haben wie das options-Array.`, qaCount, chapterTitle, l.quizOptionCount, trimmedContext)
 
-	response, err := llms.GenerateFromSinglePrompt(
-		ctx,
-		client,
-		prompt,
-		llms.WithTemperature(0.2),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("LLM-Anfrage fehlgeschlagen: %w", err)
+	cmdCtx, cancel := context.WithTimeout(ctx, l.timeout)
+	defer cancel()
+
+	args := []string{"-p", "--output-format", "json", "--tools", ""}
+	if trimmed := strings.TrimSpace(model); trimmed != "" {
+		args = append(args, "--model", trimmed)
 	}
 
-	cleaned := cleanJSONResponse(response)
+	cmd := exec.CommandContext(cmdCtx, l.binaryPath, args...)
+	cmd.Stdin = strings.NewReader(prompt)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		var execErr *exec.Error
+		if errors.As(err, &execErr) && errors.Is(execErr.Err, exec.ErrNotFound) {
+			return nil, fmt.Errorf(
+				"claude CLI nicht gefunden. Bitte Claude Code installieren und 'claude login' ausführen",
+			)
+		}
+		if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("claude CLI Timeout nach %s", l.timeout)
+		}
+		return nil, fmt.Errorf(
+			"claude CLI fehlgeschlagen: %w (stderr: %s)",
+			err,
+			strings.TrimSpace(stderr.String()),
+		)
+	}
+
+	var envelope claudeCLIResult
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		return nil, fmt.Errorf("claude CLI Antwort ist kein gültiges JSON: %w", err)
+	}
+	if envelope.IsError || envelope.Subtype != "success" {
+		return nil, fmt.Errorf("claude CLI meldete Fehler: %s", envelope.Result)
+	}
+
+	cleaned := cleanJSONResponse(envelope.Result)
 	var rawItems []llmQuestionPayload
 	if err := json.Unmarshal([]byte(cleaned), &rawItems); err != nil {
-		return nil, fmt.Errorf("LLM-Antwort ist kein valides JSON: %w", err)
+		return nil, fmt.Errorf("claude Antwort ist kein valides Quiz-JSON: %w", err)
 	}
 
 	normalized := make([]QuizQuestion, 0, len(rawItems))
@@ -164,77 +190,8 @@ genauso viele Einträge haben wie das options-Array.`, qaCount, chapterTitle, l.
 	}
 
 	if len(normalized) == 0 {
-		return nil, fmt.Errorf("LLM hat keine gültigen Fragen geliefert")
+		return nil, fmt.Errorf("claude CLI hat keine gültigen Fragen geliefert")
 	}
 
 	return normalized, nil
-}
-
-func shuffleOptionsAndRemapCorrect(
-	options []string,
-	correct []int,
-	explanations []string,
-	rng *rand.Rand,
-) ([]string, []int, []string) {
-	if len(options) <= 1 {
-		return append([]string(nil), options...),
-			append([]int(nil), correct...),
-			append([]string(nil), explanations...)
-	}
-
-	permutation := rng.Perm(len(options))
-	shuffledOptions := make([]string, len(options))
-	oldToNewIndex := make(map[int]int, len(options))
-
-	for newIdx, oldIdx := range permutation {
-		shuffledOptions[newIdx] = options[oldIdx]
-		oldToNewIndex[oldIdx] = newIdx
-	}
-
-	remappedCorrect := make([]int, 0, len(correct))
-	for _, oldIdx := range correct {
-		newIdx, exists := oldToNewIndex[oldIdx]
-		if !exists {
-			continue
-		}
-		remappedCorrect = append(remappedCorrect, newIdx)
-	}
-	sort.Ints(remappedCorrect)
-
-	var shuffledExplanations []string
-	if len(explanations) == len(options) {
-		shuffledExplanations = make([]string, len(options))
-		for newIdx, oldIdx := range permutation {
-			shuffledExplanations[newIdx] = explanations[oldIdx]
-		}
-	}
-
-	return shuffledOptions, remappedCorrect, shuffledExplanations
-}
-
-func cleanJSONResponse(raw string) string {
-	text := strings.TrimSpace(raw)
-	re := regexp.MustCompile("(?s)^```(?:json)?\\s*(.*?)\\s*```$")
-	matches := re.FindStringSubmatch(text)
-	if len(matches) == 2 {
-		return strings.TrimSpace(matches[1])
-	}
-	return text
-}
-
-func normalizeSelection(indices []int, optionCount int) []int {
-	seen := map[int]struct{}{}
-	normalized := make([]int, 0, len(indices))
-	for _, idx := range indices {
-		if idx < 0 || idx >= optionCount {
-			continue
-		}
-		if _, exists := seen[idx]; exists {
-			continue
-		}
-		seen[idx] = struct{}{}
-		normalized = append(normalized, idx)
-	}
-	sort.Ints(normalized)
-	return normalized
 }
