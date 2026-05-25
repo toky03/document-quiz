@@ -25,7 +25,8 @@ type ServiceConfig struct {
 type QuizService struct {
 	relationalStore RelationalStorePort
 	vectorStore     VectorDBPort
-	llm             LLMPort
+	openAILLM       LLMPort
+	claudeCLILLM    LLMPort
 	chunkSize       int
 	chunkOverlap    int
 }
@@ -33,39 +34,73 @@ type QuizService struct {
 func NewQuizService(
 	relationalStore RelationalStorePort,
 	vectorStore VectorDBPort,
-	llm LLMPort,
+	openAILLM LLMPort,
+	claudeCLILLM LLMPort,
 	cfg ServiceConfig,
 ) *QuizService {
 	return &QuizService{
 		relationalStore: relationalStore,
 		vectorStore:     vectorStore,
-		llm:             llm,
+		openAILLM:       openAILLM,
+		claudeCLILLM:    claudeCLILLM,
 		chunkSize:       cfg.ChunkSize,
 		chunkOverlap:    cfg.ChunkOverlap,
 	}
 }
 
+func (s *QuizService) activeProvider() string {
+	provider, err := s.relationalStore.GetSetting("llm_provider")
+	if err != nil || strings.TrimSpace(provider) == "" {
+		return ProviderOpenAI
+	}
+	return strings.TrimSpace(provider)
+}
+
+func (s *QuizService) selectLLM(provider string) LLMPort {
+	if provider == ProviderClaudeCLI {
+		return s.claudeCLILLM
+	}
+	return s.openAILLM
+}
+
 func (s *QuizService) UploadDocuments(
 	ctx context.Context,
 	cmd UploadCommand,
+	progress ProgressReporter,
 ) (UploadResult, error) {
-	if strings.TrimSpace(cmd.Model) == "" {
-		return UploadResult{}, fmt.Errorf("model ist erforderlich")
+	emit := func(ev ProgressEvent) {
+		if progress != nil {
+			progress(ev)
+		}
 	}
+
 	if len(cmd.Files) == 0 {
 		return UploadResult{}, fmt.Errorf("keine dateien hochgeladen")
 	}
 
+	provider := s.activeProvider()
+	llm := s.selectLLM(provider)
+
+	emit(ProgressEvent{Event: "start", Total: len(cmd.Files)})
+
+	// OpenAI requires both a model and an API key (used by the LLM and by the
+	// Chroma embedding function). The Claude CLI uses local OAuth and does not
+	// touch the vector store, so neither is required.
 	apiKey := strings.TrimSpace(cmd.APIKey)
-	if apiKey == "" {
-		storedKey, err := s.relationalStore.GetSetting("openai_api_key")
-		if err != nil {
-			return UploadResult{}, fmt.Errorf("api key konnte nicht geladen werden: %w", err)
+	if provider == ProviderOpenAI {
+		if strings.TrimSpace(cmd.Model) == "" {
+			return UploadResult{}, fmt.Errorf("model ist erforderlich")
 		}
-		apiKey = strings.TrimSpace(storedKey)
-	}
-	if apiKey == "" {
-		return UploadResult{}, fmt.Errorf("kein openai api key hinterlegt")
+		if apiKey == "" {
+			storedKey, err := s.relationalStore.GetSetting("openai_api_key")
+			if err != nil {
+				return UploadResult{}, fmt.Errorf("api key konnte nicht geladen werden: %w", err)
+			}
+			apiKey = strings.TrimSpace(storedKey)
+		}
+		if apiKey == "" {
+			return UploadResult{}, fmt.Errorf("kein openai api key hinterlegt")
+		}
 	}
 
 	result := UploadResult{
@@ -87,9 +122,24 @@ func (s *QuizService) UploadDocuments(
 			Stage:   stage,
 			Message: message,
 		})
+		emit(ProgressEvent{
+			Event:   "file_error",
+			File:    fileName,
+			Stage:   stage,
+			Message: message,
+		})
 	}
 
-	for _, file := range cmd.Files {
+	for idx, file := range cmd.Files {
+		fileIndex := idx + 1
+		emit(ProgressEvent{
+			Event: "file_start",
+			File:  file.Name,
+			Index: fileIndex,
+			Total: len(cmd.Files),
+		})
+
+		emit(ProgressEvent{Event: "stage", File: file.Name, Stage: "extract"})
 		text, err := extractPDFText(file.Content)
 		if err != nil {
 			result.FailedFiles++
@@ -97,12 +147,19 @@ func (s *QuizService) UploadDocuments(
 			continue
 		}
 
+		emit(ProgressEvent{Event: "stage", File: file.Name, Stage: "chunk"})
 		chunks := chunkText(text, s.chunkSize, s.chunkOverlap)
 		if len(chunks) == 0 {
 			result.FailedFiles++
 			addIssue(file.Name, "chunk_text", "Es konnten keine Textabschnitte erzeugt werden", nil)
 			continue
 		}
+		emit(ProgressEvent{
+			Event:      "stage",
+			File:       file.Name,
+			Stage:      "chunk_done",
+			ChunkCount: len(chunks),
+		})
 
 		vectorChunks := make([]VectorChunk, 0, len(chunks))
 		for chunkIndex, chunkText := range chunks {
@@ -118,15 +175,18 @@ func (s *QuizService) UploadDocuments(
 			})
 		}
 
-		if err := s.vectorStore.ReplaceChunks(ctx, file.Name, vectorChunks, apiKey); err != nil {
-			result.FailedFiles++
-			addIssue(
-				file.Name,
-				"create_embeddings",
-				"Embeddings konnten nicht gespeichert werden",
-				err,
-			)
-			continue
+		if provider == ProviderOpenAI {
+			emit(ProgressEvent{Event: "stage", File: file.Name, Stage: "embeddings"})
+			if err := s.vectorStore.ReplaceChunks(ctx, file.Name, vectorChunks, apiKey); err != nil {
+				result.FailedFiles++
+				addIssue(
+					file.Name,
+					"create_embeddings",
+					"Embeddings konnten nicht gespeichert werden",
+					err,
+				)
+				continue
+			}
 		}
 
 		chapterName := strings.TrimSuffix(file.Name, filepath.Ext(file.Name))
@@ -137,8 +197,9 @@ func (s *QuizService) UploadDocuments(
 			continue
 		}
 
+		emit(ProgressEvent{Event: "stage", File: file.Name, Stage: "generate"})
 		chapterText := strings.Join(chunks, "\n\n")
-		qaPairs, err := s.llm.GenerateQA(ctx, cmd.Model, apiKey, chapterName, chapterText, 20)
+		qaPairs, err := llm.GenerateQA(ctx, cmd.Model, apiKey, chapterName, chapterText, 20)
 		if err != nil {
 			result.FailedFiles++
 			addIssue(file.Name, "generate_quiz", "Quizfragen konnten nicht erzeugt werden", err)
@@ -153,6 +214,7 @@ func (s *QuizService) UploadDocuments(
 			continue
 		}
 
+		emit(ProgressEvent{Event: "stage", File: file.Name, Stage: "save"})
 		if err := s.relationalStore.ReplaceQAPairs(chapterID, qaPairs); err != nil {
 			result.FailedFiles++
 			addIssue(file.Name, "save_quiz", "Quizfragen konnten nicht gespeichert werden", err)
@@ -164,9 +226,19 @@ func (s *QuizService) UploadDocuments(
 		result.GeneratedChapters++
 		result.GeneratedPairs += len(qaPairs)
 		result.TotalChunks += len(chunks)
+
+		emit(ProgressEvent{
+			Event:          "file_done",
+			File:           file.Name,
+			Index:          fileIndex,
+			Total:          len(cmd.Files),
+			GeneratedPairs: len(qaPairs),
+		})
 	}
 
 	result.ErrorCount = len(result.Issues)
+	finalResult := result
+	emit(ProgressEvent{Event: "done", Result: &finalResult})
 	return result, nil
 }
 
@@ -199,6 +271,26 @@ func (s *QuizService) GetChapterQuestions(
 
 func (s *QuizService) ClearAPIKey(_ context.Context) error {
 	return s.relationalStore.DeleteSetting("openai_api_key")
+}
+
+func (s *QuizService) GetProvider(_ context.Context) (string, error) {
+	provider, err := s.relationalStore.GetSetting("llm_provider")
+	if err != nil {
+		return "", err
+	}
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return ProviderOpenAI, nil
+	}
+	return provider, nil
+}
+
+func (s *QuizService) SetProvider(_ context.Context, provider string) error {
+	trimmed := strings.TrimSpace(provider)
+	if trimmed != ProviderOpenAI && trimmed != ProviderClaudeCLI {
+		return fmt.Errorf("unbekannter llm provider: %q", provider)
+	}
+	return s.relationalStore.SetSetting("llm_provider", trimmed)
 }
 
 func (s *QuizService) DeleteChapter(_ context.Context, chapterID int) error {
