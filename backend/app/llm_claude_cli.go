@@ -66,8 +66,12 @@ Ausgangsdokument verweisen. Vermeide Formulierungen wie „laut Text",
 Kontexts gestellt werden können.
 
 Zu jeder Antwortoption gehört eine kurze Erklärung (1–2 Sätze, auf Deutsch),
-warum diese Option richtig oder falsch ist. Die Erklärungen müssen dieselbe
-Reihenfolge wie die Optionen haben.
+warum diese Option richtig oder falsch ist. Auch die Erklärungen müssen
+eigenständig verständlich sein und dürfen nicht auf das Ausgangsdokument
+verweisen (keine Formulierungen wie „laut Text", „im Dokument", „wie oben
+erwähnt", „siehe Abbildung"); benenne den Sachverhalt direkt statt darauf
+zu verweisen. Die Erklärungen müssen dieselbe Reihenfolge wie die Optionen
+haben.
 
 Kontext:
 %s
