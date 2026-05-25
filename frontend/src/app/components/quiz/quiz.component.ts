@@ -55,6 +55,35 @@ export class QuizComponent {
     return questions.every((_, index) => (givenAnswers[index] ?? []).length > 0);
   });
   readonly answeredCount = computed(() => this.answers().filter(answer => answer.length > 0).length);
+
+  readonly practiceMode = signal(false);
+  readonly revealedIndices = signal<ReadonlySet<number>>(new Set<number>());
+
+  // Once any question has been answered, the mode is fixed for the rest
+  // of the session — user picks practice or not before starting.
+  readonly practiceLocked = computed(() => this.answeredCount() > 0);
+
+  readonly isCurrentRevealed = computed(() =>
+    this.practiceMode() && this.revealedIndices().has(this.currentQuestionIndex())
+  );
+
+  readonly practiceScore = computed(() => {
+    const questions = this.questions();
+    const answers = this.answers();
+    const revealed = this.revealedIndices();
+    let correct = 0;
+    let wrong = 0;
+    for (const idx of revealed) {
+      const q = questions[idx];
+      if (!q) continue;
+      if (this.isAnswerCorrect(answers[idx] ?? [], q.correct_options)) {
+        correct++;
+      } else {
+        wrong++;
+      }
+    }
+    return { correct, wrong, open: questions.length - correct - wrong };
+  });
   readonly progressPercent = computed(() => {
     const total = this.totalQuestions();
     if (total === 0) {
@@ -157,6 +186,29 @@ export class QuizComponent {
     }
     this.error.set('');
     this.submitTrigger$.next(this.answers());
+  }
+
+  reveal(): void {
+    if (!this.practiceMode()) return;
+    if (!this.isCurrentQuestionAnswered()) return;
+    const index = this.currentQuestionIndex();
+    this.revealedIndices.update(prev => {
+      if (prev.has(index)) return prev;
+      const next = new Set(prev);
+      next.add(index);
+      return next;
+    });
+  }
+
+  isQuestionRevealed(index: number): boolean {
+    return this.practiceMode() && this.revealedIndices().has(index);
+  }
+
+  isAnswerCorrect(user: number[], correct: number[]): boolean {
+    if (user.length !== correct.length) return false;
+    const a = [...user].sort((x, y) => x - y);
+    const b = [...correct].sort((x, y) => x - y);
+    return a.every((v, i) => v === b[i]);
   }
 }
  

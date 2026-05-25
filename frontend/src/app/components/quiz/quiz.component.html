@@ -10,6 +10,27 @@
 @if (questions().length > 0 && !result()) {
   <h2 class="quiz-title">Quiz</h2>
 
+  <div class="practice-mode-row">
+    <mat-checkbox
+      [checked]="practiceMode()"
+      [disabled]="practiceLocked()"
+      (change)="practiceMode.set($event.checked)"
+    >
+      Übungsmodus
+    </mat-checkbox>
+    <span class="practice-mode-hint">
+      Antworten und Erklärungen werden direkt nach jeder Frage angezeigt; der Punktestand läuft mit.
+    </span>
+  </div>
+
+  @if (practiceMode()) {
+    <p class="practice-score">
+      Korrekt: <strong>{{ practiceScore().correct }}</strong>
+      · Falsch: <strong>{{ practiceScore().wrong }}</strong>
+      · Offen: <strong>{{ practiceScore().open }}</strong>
+    </p>
+  }
+
   @if (currentQuestion(); as question) {
     @let questionIdx = currentQuestionIndex();
     <mat-card class="question-card">
@@ -22,8 +43,6 @@
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        
-
         @if (question.quiz_type === 'single') {
           <mat-radio-group class="options-group" [name]="'q-' + questionIdx">
             @for (option of question.options; track option; let j = $index) {
@@ -31,6 +50,7 @@
                 class="option"
                 [value]="j"
                 [checked]="isChecked(questionIdx, j)"
+                [disabled]="isQuestionRevealed(questionIdx)"
                 (change)="toggleOption(questionIdx, j, question.quiz_type)"
               >{{ option }}</mat-radio-button>
             }
@@ -41,10 +61,40 @@
               <mat-checkbox
                 class="option"
                 [checked]="isChecked(questionIdx, optionIdx)"
+                [disabled]="isQuestionRevealed(questionIdx)"
                 (change)="toggleOption(questionIdx, optionIdx, question.quiz_type)"
               >{{ option }}</mat-checkbox>
             }
           </div>
+        }
+
+        @if (isQuestionRevealed(questionIdx)) {
+          <ul class="option-result-list practice-feedback">
+            @for (option of question.options; track option; let optionIdx = $index) {
+              <li
+                class="option-result"
+                [class.option-selected-correct]="isCorrectlySelectedOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)"
+                [class.option-selected-wrong]="isWronglySelectedOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)"
+                [class.option-missed-correct]="isMissedCorrectOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)"
+              >
+                <span>{{ option }}</span>
+
+                @if (isCorrectlySelectedOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)) {
+                  <span class="badge badge-correct">richtig angekreuzt</span>
+                }
+                @if (isWronglySelectedOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)) {
+                  <span class="badge badge-wrong">falsch markiert</span>
+                }
+                @if (isMissedCorrectOption(answers()[questionIdx] ?? [], question.correct_options, optionIdx)) {
+                  <span class="badge badge-missed">sollte angekreuzt werden</span>
+                }
+
+                @if (question.explanations && question.explanations[optionIdx]) {
+                  <p class="option-explanation">{{ question.explanations[optionIdx] }}</p>
+                }
+              </li>
+            }
+          </ul>
         }
       </mat-card-content>
     </mat-card>
@@ -54,7 +104,16 @@
         Vorherige Frage
       </button>
 
-      @if (questionIdx < totalQuestions() - 1) {
+      @if (practiceMode() && !isQuestionRevealed(questionIdx)) {
+        <button
+          mat-raised-button
+          color="primary"
+          (click)="reveal()"
+          [disabled]="!isCurrentQuestionAnswered()"
+        >
+          Auswerten
+        </button>
+      } @else if (questionIdx < totalQuestions() - 1) {
         <button
           mat-raised-button
           color="primary"
