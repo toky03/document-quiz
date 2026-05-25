@@ -43,29 +43,29 @@
         </mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
-        @if (question.quiz_type === 'single') {
-          <mat-radio-group class="options-group" [name]="'q-' + questionIdx">
-            @for (option of question.options; track option; let j = $index) {
-              <mat-radio-button
-                class="option"
-                [value]="j"
-                [checked]="isChecked(questionIdx, j)"
-                [disabled]="isQuestionRevealed(questionIdx)"
-                (change)="toggleOption(questionIdx, j, question.quiz_type)"
-              >{{ option }}</mat-radio-button>
-            }
-          </mat-radio-group>
-        } @else {
-          <div class="options-group">
-            @for (option of question.options; track option; let optionIdx = $index) {
-              <mat-checkbox
-                class="option"
-                [checked]="isChecked(questionIdx, optionIdx)"
-                [disabled]="isQuestionRevealed(questionIdx)"
-                (change)="toggleOption(questionIdx, optionIdx, question.quiz_type)"
-              >{{ option }}</mat-checkbox>
-            }
-          </div>
+        @if (!isQuestionRevealed(questionIdx)) {
+          @if (question.quiz_type === 'single') {
+            <mat-radio-group class="options-group" [name]="'q-' + questionIdx">
+              @for (option of question.options; track option; let j = $index) {
+                <mat-radio-button
+                  class="option"
+                  [value]="j"
+                  [checked]="isChecked(questionIdx, j)"
+                  (change)="toggleOption(questionIdx, j, question.quiz_type)"
+                >{{ option }}</mat-radio-button>
+              }
+            </mat-radio-group>
+          } @else {
+            <div class="options-group">
+              @for (option of question.options; track option; let optionIdx = $index) {
+                <mat-checkbox
+                  class="option"
+                  [checked]="isChecked(questionIdx, optionIdx)"
+                  (change)="toggleOption(questionIdx, optionIdx, question.quiz_type)"
+                >{{ option }}</mat-checkbox>
+              }
+            </div>
+          }
         }
 
         @if (isQuestionRevealed(questionIdx)) {
