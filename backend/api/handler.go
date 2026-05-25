@@ -85,35 +85,36 @@ func (h *Handler) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	result, err := h.service.UploadDocuments(r.Context(), app.UploadCommand{
+	// Stream progress as newline-delimited JSON (NDJSON). Each line is one
+	// app.ProgressEvent; the final line is {"event":"done", ...} on success
+	// or {"event":"error", ...} on hard failure.
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, _ := w.(http.Flusher)
+	encoder := json.NewEncoder(w)
+	emit := func(ev app.ProgressEvent) {
+		if err := encoder.Encode(ev); err != nil {
+			return
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+
+	_, err := h.service.UploadDocuments(r.Context(), app.UploadCommand{
 		Model:  model,
 		APIKey: apiKey,
 		Files:  uploadedFiles,
-	})
+	}, emit)
 	if err != nil {
-		if isBadRequestError(err) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": toUserError(err)})
-			return
-		}
-		writeJSON(
-			w,
-			http.StatusInternalServerError,
-			map[string]string{"error": "Verarbeitung fehlgeschlagen"},
-		)
-		return
+		emit(app.ProgressEvent{
+			Event:   "error",
+			Message: toUserError(err),
+		})
 	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"message":            "Verarbeitung abgeschlossen",
-		"processed_files":    result.ProcessedFiles,
-		"successful_files":   result.SuccessfulFiles,
-		"failed_files":       result.FailedFiles,
-		"error_count":        result.ErrorCount,
-		"issues":             result.Issues,
-		"generated_chapters": result.GeneratedChapters,
-		"generated_pairs":    result.GeneratedPairs,
-		"total_chunks":       result.TotalChunks,
-	})
 }
 
 func (h *Handler) handleClearAPIKey(w http.ResponseWriter, r *http.Request) {

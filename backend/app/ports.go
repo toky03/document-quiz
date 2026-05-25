@@ -4,7 +4,11 @@ import "context"
 
 // APIPort is the inbound port used by HTTP handlers.
 type APIPort interface {
-	UploadDocuments(ctx context.Context, cmd UploadCommand) (UploadResult, error)
+	UploadDocuments(
+		ctx context.Context,
+		cmd UploadCommand,
+		progress ProgressReporter,
+	) (UploadResult, error)
 	SaveAPIKey(ctx context.Context, apiKey string) error
 	IsAPIKeySaved(ctx context.Context) (bool, error)
 	ListChapters(ctx context.Context) ([]Chapter, error)
@@ -21,6 +25,24 @@ const (
 	ProviderOpenAI    = "openai"
 	ProviderClaudeCLI = "claude_cli"
 )
+
+// ProgressEvent is emitted at each stage of an upload. Consumers receive a
+// stream of these so they can render fine-grained UI feedback.
+type ProgressEvent struct {
+	Event          string        `json:"event"`
+	File           string        `json:"file,omitempty"`
+	Index          int           `json:"index,omitempty"`
+	Total          int           `json:"total,omitempty"`
+	Stage          string        `json:"stage,omitempty"`
+	Message        string        `json:"message,omitempty"`
+	ChunkCount     int           `json:"chunk_count,omitempty"`
+	GeneratedPairs int           `json:"generated_pairs,omitempty"`
+	Result         *UploadResult `json:"result,omitempty"`
+}
+
+// ProgressReporter receives streaming events. May be nil; callers must
+// tolerate a no-op reporter.
+type ProgressReporter func(ProgressEvent)
 
 // RelationalStorePort is the outbound port for relational persistence and app settings.
 type RelationalStorePort interface {

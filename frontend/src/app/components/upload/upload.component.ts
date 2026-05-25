@@ -12,12 +12,10 @@ import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDialog } from '@angular/material/dialog';
-import { QuizService, Chapter } from '../../services/quiz.service';
+import { QuizService, Chapter, UploadProgressEvent } from '../../services/quiz.service';
 import { ConfirmDialogComponent } from '../confirm-dialog/confirm-dialog.component';
 
 type Provider = 'openai' | 'claude_cli';
-
-interface UploadParams { files: File[]; model: string; apiKey: string; }
 
 @Component({
   selector: 'app-upload',
@@ -45,13 +43,38 @@ export class UploadComponent {
   readonly files = signal<File[]>([]);
   readonly error = signal('');
   readonly isLoading = signal(false);
+  readonly progressFile = signal('');
+  readonly progressIndex = signal(0);
+  readonly progressTotal = signal(0);
+  readonly progressStage = signal('');
+  readonly progressStartMs = signal(0);
+  readonly progressNowMs = signal(0);
+
+  readonly progressElapsedSec = computed(() => {
+    const start = this.progressStartMs();
+    const now = this.progressNowMs();
+    if (!start) return 0;
+    return Math.max(0, Math.floor((now - start) / 1000));
+  });
+
+  readonly progressStageLabel = computed(() => {
+    switch (this.progressStage()) {
+      case 'extract':     return 'PDF wird extrahiert';
+      case 'chunk':       return 'Text wird zerlegt';
+      case 'chunk_done':  return 'Text zerlegt';
+      case 'embeddings':  return 'Embeddings werden erzeugt';
+      case 'generate':    return 'Fragen werden generiert (kann 30–120s dauern)';
+      case 'save':        return 'Fragen werden gespeichert';
+      case '':            return '';
+      default:            return this.progressStage();
+    }
+  });
 
   model = 'gpt-4.1-mini';
   apiKey = '';
   readonly provider = signal<Provider>('openai');
 
   private readonly refreshTrigger$ = new Subject<void>();
-  private readonly uploadTrigger$ = new Subject<UploadParams>();
   private readonly apiKeyRefreshTrigger$ = new Subject<void>();
   private readonly providerRefreshTrigger$ = new Subject<void>();
 
@@ -102,25 +125,83 @@ export class UploadComponent {
 
   readonly chapterList = computed(() => this.chapters() ?? []);
 
-  private readonly _uploadEffect = toSignal(
-    this.uploadTrigger$.pipe(
-      tap(() => { this.isLoading.set(true); this.error.set(''); }),
-      switchMap(({ files, model, apiKey }) =>
-        this.quizService.uploadFiles(files, model, apiKey).pipe(
-          tap(() => {
-            this.isLoading.set(false);
-            this.files.set([]);
-            this.refreshTrigger$.next();
-          }),
-          catchError((err: Error) => {
-            this.isLoading.set(false);
-            this.error.set(err.message);
-            return EMPTY;
-          })
-        )
-      )
-    )
-  );
+  private elapsedTimer: ReturnType<typeof setInterval> | null = null;
+
+  private startElapsedTimer(): void {
+    this.progressStartMs.set(Date.now());
+    this.progressNowMs.set(Date.now());
+    if (this.elapsedTimer) clearInterval(this.elapsedTimer);
+    this.elapsedTimer = setInterval(() => this.progressNowMs.set(Date.now()), 1000);
+  }
+
+  private stopElapsedTimer(): void {
+    if (this.elapsedTimer) {
+      clearInterval(this.elapsedTimer);
+      this.elapsedTimer = null;
+    }
+  }
+
+  private resetProgress(): void {
+    this.progressFile.set('');
+    this.progressIndex.set(0);
+    this.progressTotal.set(0);
+    this.progressStage.set('');
+    this.progressStartMs.set(0);
+    this.progressNowMs.set(0);
+    this.stopElapsedTimer();
+  }
+
+  private handleProgressEvent(ev: UploadProgressEvent): void {
+    switch (ev.event) {
+      case 'start':
+        this.progressTotal.set(ev.total ?? 0);
+        break;
+      case 'file_start':
+        this.progressFile.set(ev.file ?? '');
+        this.progressIndex.set(ev.index ?? 0);
+        if (ev.total) this.progressTotal.set(ev.total);
+        this.progressStage.set('');
+        break;
+      case 'stage':
+        this.progressStage.set(ev.stage ?? '');
+        break;
+      case 'file_done':
+        this.progressStage.set('');
+        break;
+      case 'file_error':
+        this.error.set(`${ev.file ?? ''}: ${ev.message ?? 'Fehler'}`);
+        break;
+      case 'error':
+        this.error.set(ev.message ?? 'Fehler beim Upload');
+        break;
+      case 'done':
+        // final event; UI is reset by the consumer.
+        break;
+    }
+  }
+
+  private async runStreamingUpload(
+    files: File[],
+    model: string,
+    apiKey: string,
+  ): Promise<void> {
+    this.isLoading.set(true);
+    this.error.set('');
+    this.startElapsedTimer();
+    try {
+      const stream = this.quizService.uploadFilesStreaming(files, model, apiKey);
+      for await (const ev of stream) {
+        this.handleProgressEvent(ev);
+      }
+    } catch (err) {
+      this.error.set((err as Error).message);
+    } finally {
+      this.isLoading.set(false);
+      this.resetProgress();
+      this.files.set([]);
+      this.refreshTrigger$.next();
+    }
+  }
 
   onFilesSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -132,7 +213,7 @@ export class UploadComponent {
       this.error.set('Bitte mindestens eine PDF-Datei auswählen.');
       return;
     }
-    this.uploadTrigger$.next({ files: this.files(), model: this.model, apiKey: this.apiKey });
+    void this.runStreamingUpload(this.files(), this.model, this.apiKey);
   }
 
   openQuiz(chapter: Chapter): void {

@@ -32,6 +32,18 @@ export interface QuizResult {
   }>;
 }
 
+export interface UploadProgressEvent {
+  event: 'start' | 'file_start' | 'stage' | 'file_done' | 'file_error' | 'done' | 'error';
+  file?: string;
+  index?: number;
+  total?: number;
+  stage?: string;
+  message?: string;
+  chunk_count?: number;
+  generated_pairs?: number;
+  result?: unknown;
+}
+
 @Injectable({ providedIn: 'root' })
 export class QuizService {
 
@@ -39,7 +51,15 @@ export class QuizService {
 
   constructor(private http: HttpClient) {}
 
-  uploadFiles(files: File[], model: string, apiKey: string): Observable<unknown> {
+  /**
+   * Streaming upload: yields one NDJSON event per backend stage.
+   * Throws on HTTP/network errors. The stream ends after a 'done' or 'error' event.
+   */
+  async *uploadFilesStreaming(
+    files: File[],
+    model: string,
+    apiKey: string,
+  ): AsyncGenerator<UploadProgressEvent, void, void> {
     const formData = new FormData();
     for (const file of files) {
       formData.append('files', file, file.name);
@@ -48,7 +68,46 @@ export class QuizService {
     if (apiKey.trim()) {
       formData.append('api_key', apiKey.trim());
     }
-    return this.http.post(`${this.apiUrl}/upload`, formData);
+
+    const res = await fetch(`${this.apiUrl}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok || !res.body) {
+      throw new Error(`Upload fehlgeschlagen (HTTP ${res.status})`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let nl: number;
+      while ((nl = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) continue;
+        try {
+          yield JSON.parse(line) as UploadProgressEvent;
+        } catch {
+          // Skip malformed lines rather than aborting the whole upload.
+        }
+      }
+    }
+
+    const tail = buffer.trim();
+    if (tail) {
+      try {
+        yield JSON.parse(tail) as UploadProgressEvent;
+      } catch {
+        // ignore
+      }
+    }
   }
 
   getChapters(): Observable<Chapter[]> {

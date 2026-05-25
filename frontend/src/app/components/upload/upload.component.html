@@ -57,6 +57,21 @@
       {{ isLoading() ? 'Verarbeite...' : 'Upload starten' }}
     </button>
   }
+
+  @if (isLoading()) {
+    <mat-card-content class="progress-block">
+      @if (progressTotal() > 0) {
+        <p class="progress-line">
+          <strong>Datei {{ progressIndex() }} / {{ progressTotal() }}</strong>
+          @if (progressFile()) { — {{ progressFile() }} }
+        </p>
+      }
+      @if (progressStageLabel()) {
+        <p class="progress-line muted">{{ progressStageLabel() }}</p>
+      }
+      <p class="progress-line muted">Laufzeit: {{ progressElapsedSec() }}s</p>
+    </mat-card-content>
+  }
   <mat-card-actions align="start">
 
   </mat-card-actions>
