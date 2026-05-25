@@ -36,6 +36,16 @@ export class QuizComponent {
   readonly chapterId = Number(this.route.snapshot.paramMap.get('chapterId'));
   readonly error = signal(this.chapterId > 0 ? '' : 'Ungültige Kapitel-ID.');
 
+  // Quiz options come in as query params from the start dialog. Defaults
+  // here (all off) apply when the quiz is opened directly without going
+  // through the dialog (e.g. a bookmarked /quiz/:id URL).
+  private readonly shuffleQuestionsEnabled =
+    this.route.snapshot.queryParamMap.get('shuffleQ') === '1';
+  private readonly shuffleOptionsEnabled =
+    this.route.snapshot.queryParamMap.get('shuffleO') === '1';
+  private readonly practiceModeEnabled =
+    this.route.snapshot.queryParamMap.get('practice') === '1';
+
   readonly questions = toSignal(
     this.quizService.getQuestions(this.chapterId).pipe(
       catchError((err: Error) => { this.error.set(err.message); return EMPTY; })
@@ -45,7 +55,40 @@ export class QuizComponent {
 
   readonly answers = signal<number[][]>([]);
   readonly currentQuestionIndex = signal(0);
+  // displayOrder[i] is the canonical index of the question shown at
+  // position i. Lets us shuffle the play order without renaming
+  // anything else: `answers`, `revealedIndices`, etc. all remain keyed
+  // by display position; we only translate to canonical on submit.
+  readonly displayOrder = signal<number[]>([]);
+  // optionDisplayOrder[displayQIdx] is the permutation of canonical
+  // option indices for the question shown at displayQIdx. answers[] /
+  // correct_options[] / explanations[] are stored in canonical option
+  // order; the template iterates display order but always references
+  // the original canonical index, so the rest of the component stays
+  // unchanged.
+  readonly optionDisplayOrder = signal<number[][]>([]);
   readonly totalQuestions = computed(() => this.questions().length);
+
+  readonly displayedQuestions = computed(() => {
+    const qs = this.questions();
+    const order = this.displayOrder();
+    if (order.length !== qs.length) return qs;
+    return order.map(i => qs[i]);
+  });
+
+  readonly currentQuestionDisplayedOptions = computed(() => {
+    const q = this.currentQuestion();
+    if (!q) return [] as Array<{ canonicalIdx: number; text: string; explanation: string }>;
+    const order = this.optionDisplayOrder()[this.currentQuestionIndex()];
+    const useOrder = order && order.length === q.options.length
+      ? order
+      : q.options.map((_, i) => i);
+    return useOrder.map(canonicalIdx => ({
+      canonicalIdx,
+      text: q.options[canonicalIdx],
+      explanation: q.explanations?.[canonicalIdx] ?? '',
+    }));
+  });
   readonly allAnswered = computed(() => {
     const questions = this.questions();
     const givenAnswers = this.answers();
@@ -56,25 +99,21 @@ export class QuizComponent {
   });
   readonly answeredCount = computed(() => this.answers().filter(answer => answer.length > 0).length);
 
-  readonly practiceMode = signal(false);
+  readonly practiceMode = signal(this.practiceModeEnabled);
   readonly revealedIndices = signal<ReadonlySet<number>>(new Set<number>());
-
-  // Once any question has been answered, the mode is fixed for the rest
-  // of the session — user picks practice or not before starting.
-  readonly practiceLocked = computed(() => this.answeredCount() > 0);
 
   readonly isCurrentRevealed = computed(() =>
     this.practiceMode() && this.revealedIndices().has(this.currentQuestionIndex())
   );
 
   readonly practiceScore = computed(() => {
-    const questions = this.questions();
+    const displayed = this.displayedQuestions();
     const answers = this.answers();
     const revealed = this.revealedIndices();
     let correct = 0;
     let wrong = 0;
     for (const idx of revealed) {
-      const q = questions[idx];
+      const q = displayed[idx];
       if (!q) continue;
       if (this.isAnswerCorrect(answers[idx] ?? [], q.correct_options)) {
         correct++;
@@ -82,7 +121,7 @@ export class QuizComponent {
         wrong++;
       }
     }
-    return { correct, wrong, open: questions.length - correct - wrong };
+    return { correct, wrong, open: displayed.length - correct - wrong };
   });
   readonly progressPercent = computed(() => {
     const total = this.totalQuestions();
@@ -92,7 +131,7 @@ export class QuizComponent {
     return (this.answeredCount() / total) * 100;
   });
   readonly currentQuestion = computed(() => {
-    const questions = this.questions();
+    const questions = this.displayedQuestions();
     const index = this.currentQuestionIndex();
     return questions[index];
   });
@@ -114,8 +153,63 @@ export class QuizComponent {
       const questions = this.questions();
       this.answers.set(new Array(questions.length).fill(null).map(() => []));
       this.currentQuestionIndex.set(0);
+      this.revealedIndices.set(new Set<number>());
+      const order = this.shuffleQuestionsEnabled
+        ? this.shuffledIndices(questions.length)
+        : this.identityIndices(questions.length);
+      this.displayOrder.set(order);
+      // Per-question option permutation, keyed by display question index
+      // so it lines up with displayedQuestions / answers / reveals.
+      this.optionDisplayOrder.set(
+        order.map(canonicalQIdx => {
+          const n = questions[canonicalQIdx]?.options.length ?? 0;
+          return this.shuffleOptionsEnabled ? this.shuffledIndices(n) : this.identityIndices(n);
+        }),
+      );
     });
   }
+
+  private shuffledIndices(n: number): number[] {
+    const arr = this.identityIndices(n);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  private identityIndices(n: number): number[] {
+    return Array.from({ length: n }, (_, i) => i);
+  }
+
+  readonly displayedResults = computed(() => {
+    const r = this.result();
+    if (!r) return null;
+    const order = this.displayOrder();
+    if (order.length !== r.results.length) return r;
+    return {
+      ...r,
+      results: order.map(i => r.results[i]),
+    };
+  });
+
+  readonly displayedResultItems = computed(() => {
+    const r = this.displayedResults();
+    if (!r) return [];
+    const optionOrders = this.optionDisplayOrder();
+    return r.results.map((item, displayQIdx) => {
+      const optOrder = optionOrders[displayQIdx];
+      const useOrder = optOrder && optOrder.length === item.options.length
+        ? optOrder
+        : item.options.map((_, i) => i);
+      const displayOptions = useOrder.map(canonicalIdx => ({
+        canonicalIdx,
+        text: item.options[canonicalIdx],
+        explanation: item.explanations?.[canonicalIdx] ?? '',
+      }));
+      return { ...item, displayOptions };
+    });
+  });
 
   previousQuestion(): void {
     this.currentQuestionIndex.update(index => Math.max(0, index - 1));
@@ -185,7 +279,17 @@ export class QuizComponent {
       return;
     }
     this.error.set('');
-    this.submitTrigger$.next(this.answers());
+
+    // The backend zips the answers array against questions in canonical
+    // (id ASC) order, so translate from display order before sending.
+    const order = this.displayOrder();
+    const displayed = this.answers();
+    const canonical: number[][] = new Array(displayed.length).fill(null).map(() => []);
+    for (let i = 0; i < displayed.length; i++) {
+      const canonicalIdx = order[i] ?? i;
+      canonical[canonicalIdx] = displayed[i];
+    }
+    this.submitTrigger$.next(canonical);
   }
 
   reveal(): void {
